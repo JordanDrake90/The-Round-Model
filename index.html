@@ -40,6 +40,15 @@ window.storage = {
 };
 
   </script>
+
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      document.getElementById('root').innerHTML = 
+        '<div style="padding:40px;font-family:monospace;color:#b00;background:#fff1f0;border:1px solid #ffa39e;margin:20px;border-radius:4px">' +
+        '<strong>Runtime Error:</strong><br/>' + msg + '<br/><br/>' +
+        '<small>' + src + ' line ' + line + '</small></div>';
+    };
+  </script>
   <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect, useCallback, useRef } = React;
 
@@ -2097,7 +2106,7 @@ function BackendTab({ s, r, budgetPct, royaltyTopLine=true, onToggleRoyalty }) {
 const TABS=[["model","Model"],["compare","Compare"],["waterfall","Waterfall"],["scenarios","Scenarios"],["backend","Backend"]];
 const FONT_SIZES=[13,14,15,16,18];
 
-export default function TheRoundModel() {
+function TheRoundModel() {
   const [scenarios,setScenarios]=useState(SEED);
   const [selected,setSelected]=useState("LANA DEL REY — BASE");
   const [tab,setTab]=useState("model");
