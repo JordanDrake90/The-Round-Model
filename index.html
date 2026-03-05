@@ -1,0 +1,2932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Round — Financial Model</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f7f5f1; font-family: 'DM Mono', monospace; }
+    input[type=range] { cursor: pointer; }
+    .hover-row:hover td { background: rgba(200,112,32,0.06) !important; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+
+// localStorage-based storage shim (replaces window.storage for external deployment)
+window.storage = {
+  get: async (key) => {
+    try { const v = localStorage.getItem(key); return v != null ? {value: v} : null; } catch { return null; }
+  },
+  set: async (key, value) => {
+    try { localStorage.setItem(key, value); return {key, value}; } catch { return null; }
+  },
+  delete: async (key) => {
+    try { localStorage.removeItem(key); return {key, deleted: true}; } catch { return null; }
+  },
+  list: async (prefix) => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+      return {keys};
+    } catch { return {keys:[]}; }
+  }
+};
+
+  </script>
+  <script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useCallback, useRef } = React;
+
+// imports handled above
+
+/* ══════════════════════════════════════════════════════════════
+   THE ROUND — UNIFIED FINANCIAL MODEL v4
+   Light / white theme — all requested changes applied
+   ══════════════════════════════════════════════════════════════ */
+
+const MN = "'DM Mono', monospace";
+const SR = "'Playfair Display', serif";
+const SS = "'DM Sans', sans-serif";
+
+const T = {
+  bg:           "#ffffff",
+  bgSub:        "#f7f6f4",
+  bgCard:       "#f9f8f6",
+  bgDeep:       "#f2f0ed",
+  border:       "rgba(0,0,0,0.08)",
+  borderMid:    "rgba(0,0,0,0.13)",
+  borderStrong: "rgba(0,0,0,0.22)",
+  text:         "#1a1814",
+  textMid:      "#5a5550",
+  textDim:      "#8e8880",
+  textFaint:    "#bab5ae",
+  gold:         "#8a6800",
+  goldBg:       "rgba(138,104,0,0.07)",
+  goldBorder:   "rgba(138,104,0,0.25)",
+  green:        "#1a6e3a",
+  greenBg:      "rgba(26,110,58,0.07)",
+  red:          "#b03030",
+  redBg:        "rgba(176,48,48,0.07)",
+  blue:         "#1a4e8a",
+  blueBg:       "rgba(26,78,138,0.07)",
+  purple:       "#6a3a9e",
+  purpleBg:     "rgba(106,58,158,0.07)",
+  orange:       "#b05a10",
+  pink:         "#a03060",
+  inputBg:      "#ffffff",
+  inputBorder:  "rgba(0,0,0,0.14)",
+  baseAccent:   "#1a4e8a",
+  highAccent:   "#6a3a9e",
+  baseBg:       "rgba(26,78,138,0.06)",
+  highBg:       "rgba(106,58,158,0.06)",
+  baseBorder:   "rgba(26,78,138,0.20)",
+  highBorder:   "rgba(106,58,158,0.20)",
+};
+const CL = [T.orange, T.blue, T.purple, T.green, T.gold, T.pink];
+
+// ── Models ──────────────────────────────────────────────────────
+// ── Projection Models ────────────────────────────────────────────
+const GBO_MODEL = {
+  gbo:   { slope:59285, intercept:453548 },
+  screens: { slope:20.3, intercept:962 },
+  distributionCosts: { perScreen:141.5, base:118023 },
+  breakout: { standard:25/12, largeFootprint:7/3, threshold:2500 },
+};
+
+function projectTheatrical(spotifyFollowers) {
+  const fM = spotifyFollowers / 1_000_000;
+  const baseGBO = GBO_MODEL.gbo.slope * fM + GBO_MODEL.gbo.intercept;
+  const screens = GBO_MODEL.screens.slope * fM + GBO_MODEL.screens.intercept;
+  const distCost = GBO_MODEL.distributionCosts.perScreen * screens + GBO_MODEL.distributionCosts.base;
+  const isLarge = screens >= GBO_MODEL.breakout.threshold;
+  const bMult = isLarge ? GBO_MODEL.breakout.largeFootprint : GBO_MODEL.breakout.standard;
+  return {
+    baseGBO:     Math.round(baseGBO / 1000) * 1000,
+    breakoutGBO: Math.round(baseGBO * bMult / 1000) * 1000,
+    distCost:    Math.round(distCost / 1000) * 1000,
+    screens:     Math.round(screens),
+    bMult,
+  };
+}
+
+const D2C_RATES = {
+  high: { strong:0.0012, mid:0.0008, weak:0.0005 },
+  mid:  { strong:0.0009, mid:0.0006, weak:0.0003 },
+  low:  { strong:0.0006, mid:0.0004, weak:0.0002 },
+};
+const THEATER_RATES = { high:0.10, mid:0.07, low:0.05 };
+const TOURING_TICKETS = { stadium:200000, arena:80000, theater:20000, club:5000, festival:30000, inactive:15000 };
+
+function autoTouringTier(spotifyListeners, instagramFollowers) {
+  const l = spotifyListeners, ig = instagramFollowers;
+  if (l >= 50e6 || ig >= 20e6) return "stadium";
+  if (l >= 15e6 || ig >= 5e6)  return "arena";
+  if (l >= 3e6  || ig >= 1e6)  return "theater";
+  if (l >= 500e3 || ig >= 200e3) return "club";
+  return "inactive";
+}
+
+function autoMerchInfraScore(spotifyListeners, instagramFollowers, touringTier) {
+  let score = 0;
+  if (spotifyListeners >= 40e6) score += 35;
+  else if (spotifyListeners >= 10e6) score += 25;
+  else if (spotifyListeners >= 2e6) score += 15;
+  else score += 5;
+  if (instagramFollowers >= 10e6) score += 35;
+  else if (instagramFollowers >= 2e6) score += 25;
+  else if (instagramFollowers >= 500e3) score += 15;
+  else score += 5;
+  const ts = { stadium:30, arena:22, theater:14, club:8, festival:16, inactive:4 };
+  score += ts[touringTier] || 4;
+  return Math.min(100, score);
+}
+
+function projectMerch({ spotifyFollowers, spotifyListeners, touringTier, instagramFollowers, merchInfraScore, depthBand }) {
+  const infraBand = merchInfraScore >= 80 ? "strong" : merchInfraScore >= 55 ? "mid" : "weak";
+  const d2cBase = D2C_RATES[depthBand]?.[infraBand] || 0.0006;
+  const tickets = TOURING_TICKETS[touringTier] || 15000;
+  const scaleS = spotifyListeners>=40e6?85:spotifyListeners>=10e6?60:spotifyListeners>=2e6?38:20;
+  const composite = (scaleS + (instagramFollowers>=5e6?72:instagramFollowers>=1e6?48:28) + merchInfraScore) / 3;
+  const thTier = composite>=70?"high":composite>=50?"mid":"low";
+  const thBase = THEATER_RATES[thTier];
+  const base = { d2c:Math.round(spotifyFollowers*d2cBase),        theater:Math.round(tickets*thBase) };
+  const high = { d2c:Math.round(spotifyFollowers*d2cBase*1.85),   theater:Math.round(tickets*thBase*1.6) };
+  return {
+    base: base.d2c + base.theater,
+    high: high.d2c + high.theater,
+    infraBand,
+  };
+}
+
+// ── Comp dataset (post-2015 Luminate data) ──────────────────────
+// Used to override regression for known artists
+const COMP_ALBUMS = [
+  {artist:"Alicia Keys",lp:2969,cd:9761,sod:193184595},{artist:"Alicia Keys",lp:5173,cd:102846,sod:189879856},
+  {artist:"Beyoncé",lp:178837,cd:124124,sod:1779495156},{artist:"Beyoncé",lp:216426,cd:194330,sod:2944647860},{artist:"Beyoncé",lp:188182,cd:499975,sod:2417099645},
+  {artist:"Coldplay",lp:49513,cd:72452,sod:279188408},{artist:"Coldplay",lp:50558,cd:45604,sod:553993215},{artist:"Coldplay",lp:22790,cd:53523,sod:249272461},{artist:"Coldplay",lp:50348,cd:278789,sod:2564942626},
+  {artist:"Dijon",lp:10242,cd:2542,sod:28919322},
+  {artist:"Doechii",lp:105411,cd:15460,sod:1052487044},
+  {artist:"Eminem",lp:58212,cd:48044,sod:1234195267},{artist:"Eminem",lp:37159,cd:137170,sod:3608109841},{artist:"Eminem",lp:32345,cd:166173,sod:3315154012},{artist:"Eminem",lp:7247,cd:203591,sod:1382495477},
+  {artist:"Erykah Badu",lp:14195,cd:null,sod:205699189},
+  {artist:"Florence + The Machine",lp:56568,cd:43366,sod:278096562},{artist:"Florence + The Machine",lp:27337,cd:77382,sod:259661316},{artist:"Florence + The Machine",lp:25133,cd:155062,sod:407132789},
+  {artist:"Frank Ocean",lp:19832,cd:17086,sod:5838415041},
+  {artist:"Geese",lp:42517,cd:13082,sod:55567925},
+  {artist:"J Cole",lp:78003,cd:49727,sod:2653202464},{artist:"J Cole",lp:67015,cd:102152,sod:3283074436},{artist:"J Cole",lp:54514,cd:202196,sod:3195161431},
+  {artist:"Jay Z",lp:null,cd:191791,sod:1164335060},
+  {artist:"Jon Batiste",lp:15756,cd:22547,sod:14890510},{artist:"Jon Batiste",lp:15898,cd:16077,sod:48264952},{artist:"Jon Batiste",lp:25337,cd:55435,sod:101356596},{artist:"Jon Batiste",lp:4706,cd:18970,sod:54690158},
+  {artist:"Kendrick Lamar",lp:153200,cd:50411,sod:2329413757},{artist:"Kendrick Lamar",lp:160864,cd:97318,sod:2627611926},{artist:"Kendrick Lamar",lp:456306,cd:492810,sod:10204677444},{artist:"Kendrick Lamar",lp:471479,cd:420227,sod:3103965574},
+  {artist:"Lana Del Rey",lp:300702,cd:83595,sod:721744000},{artist:"Lana Del Rey",lp:85142,cd:52491,sod:432376071},{artist:"Lana Del Rey",lp:167408,cd:50647,sod:359122572},{artist:"Lana Del Rey",lp:179977,cd:119090,sod:1888467689},{artist:"Lana Del Rey",lp:112653,cd:108364,sod:1410556697},{artist:"Lana Del Rey",lp:86511,cd:134695,sod:916477678},
+  {artist:"Lady Gaga",lp:125865,cd:85907,sod:1640010592},{artist:"Lady Gaga",lp:121498,cd:141783,sod:1485106404},{artist:"Lady Gaga",lp:61604,cd:336383,sod:1235481037},
+  {artist:"MK.GEE",lp:21076,cd:3138,sod:141814656},
+  {artist:"Nick Cave & The Bad Seeds",lp:16418,cd:9708,sod:6133839},{artist:"Nick Cave & The Bad Seeds",lp:14781,cd:15082,sod:10842435},{artist:"Nick Cave & The Bad Seeds",lp:17301,cd:21133,sod:12115149},
+  {artist:"Radiohead",lp:109252,cd:116661,sod:318555549},{artist:"Radiohead",lp:80664,cd:52706,sod:1261027830},
+  {artist:"Rihanna",lp:107920,cd:336163,sod:8471028990},
+  {artist:"Run The Jewels",lp:56745,cd:21159,sod:277882580},{artist:"Run The Jewels",lp:40015,cd:39573,sod:410652543},
+  {artist:"Tame Impala",lp:169421,cd:82244,sod:1279763505},{artist:"Tame Impala",lp:530647,cd:126339,sod:3329479722},
+  {artist:"Tyler, The Creator",lp:81021,cd:59797,sod:552684164},{artist:"Tyler, The Creator",lp:68665,cd:164918,sod:1909733104},{artist:"Tyler, The Creator",lp:474755,cd:74825,sod:2334045019},{artist:"Tyler, The Creator",lp:799451,cd:137779,sod:4029061280},{artist:"Tyler, The Creator",lp:543576,cd:142417,sod:3695476283},
+  {artist:"Arctic Monkeys",lp:62787,cd:19851,sod:110914313},
+];
+
+// Canonical name aliases for lookup matching
+const ARTIST_ALIASES = {
+  "tyler the creator": "Tyler, The Creator",
+  "tyler, the creator": "Tyler, The Creator",
+  "kendrick": "Kendrick Lamar",
+  "kendrick lamar": "Kendrick Lamar",
+  "beyonce": "Beyoncé",
+  "beyoncé": "Beyoncé",
+  "j. cole": "J Cole",
+  "j cole": "J Cole",
+  "lana del rey": "Lana Del Rey",
+  "lady gaga": "Lady Gaga",
+  "frank ocean": "Frank Ocean",
+  "tame impala": "Tame Impala",
+  "eminem": "Eminem",
+  "radiohead": "Radiohead",
+  "rihanna": "Rihanna",
+  "coldplay": "Coldplay",
+  "florence + the machine": "Florence + The Machine",
+  "florence and the machine": "Florence + The Machine",
+  "run the jewels": "Run The Jewels",
+  "doechii": "Doechii",
+  "mk.gee": "MK.GEE",
+  "mkgee": "MK.GEE",
+  "dijon": "Dijon",
+  "geese": "Geese",
+  "arctic monkeys": "Arctic Monkeys",
+  "jon batiste": "Jon Batiste",
+  "nick cave": "Nick Cave & The Bad Seeds",
+  "nick cave & the bad seeds": "Nick Cave & The Bad Seeds",
+  "jay z": "Jay Z",
+  "jay-z": "Jay Z",
+  "alicia keys": "Alicia Keys",
+  "erykah badu": "Erykah Badu",
+};
+
+function resolveArtistName(name) {
+  return ARTIST_ALIASES[name.toLowerCase().trim()] || null;
+}
+
+function getCompStats(artistName) {
+  const canonical = resolveArtistName(artistName);
+  if (!canonical) return null;
+  const rows = COMP_ALBUMS.filter(a => a.artist === canonical);
+  if (!rows.length) return null;
+  const lpVals = rows.map(r => r.lp).filter(v => v != null).sort((a,b)=>a-b);
+  const cdVals = rows.map(r => r.cd).filter(v => v != null).sort((a,b)=>a-b);
+  const mid = arr => arr[Math.floor(arr.length/2)];
+  const vp = lpVals.length >= 2 ? { base: lpVals[Math.floor(lpVals.length*0.25)] || lpVals[0], high: lpVals[Math.floor(lpVals.length*0.75)] || lpVals[lpVals.length-1] } : { base: lpVals[0]||0, high: lpVals[0]||0 };
+  const cp = cdVals.length >= 2 ? { base: cdVals[Math.floor(cdVals.length*0.25)] || cdVals[0], high: cdVals[Math.floor(cdVals.length*0.75)] || cdVals[cdVals.length-1] } : { base: cdVals[0]||0, high: cdVals[0]||0 };
+  const cassBase = Math.max(500, Math.min(10000, Math.round(vp.base * 0.03 / 100) * 100));
+  const cassHigh = Math.max(500, Math.min(10000, Math.round(vp.high * 0.07 / 100) * 100));
+  return {
+    vinyl:    vp,
+    cd:       cp,
+    cassette: { base: cassBase, high: cassHigh },
+    source: "comp",
+    albumCount: rows.length,
+    canonicalName: canonical,
+  };
+}
+
+// ── Album projection: regression-based fallback ──────────────────
+// Fitted from 59 post-2015 Luminate albums (log-log OLS):
+//   vinyl = 5.661 × sod^0.4586   R²=0.41
+//   cd    = 4.144 × sod^0.4774   R²=0.52
+// SOD estimated from monthly listeners:
+//   base = listeners × 14 (p25 of observed multipliers)
+//   high = listeners × 35 (p75 of observed multipliers)
+// Residual bands applied: base ×0.7, high ×1.8 (vinyl) / ×1.75 (cd)
+function projectAlbumSales(spotifyListeners, artistName) {
+  // Try comp dataset first
+  const comp = getCompStats(artistName || "");
+  if (comp) return { ...comp };
+
+  // Regression fallback
+  const sodBase = spotifyListeners * 14;
+  const sodHigh = spotifyListeners * 35;
+  const vBase = Math.round(5.661 * Math.pow(sodBase, 0.4586) * 0.70 / 100) * 100;
+  const vHigh = Math.round(5.661 * Math.pow(sodHigh, 0.4586) * 1.80 / 100) * 100;
+  const cBase = Math.round(4.144 * Math.pow(sodBase, 0.4774) * 0.75 / 100) * 100;
+  const cHigh = Math.round(4.144 * Math.pow(sodHigh, 0.4774) * 1.75 / 100) * 100;
+  const cassBase = Math.max(500, Math.min(10000, Math.round(vBase * 0.03 / 100) * 100));
+  const cassHigh = Math.max(500, Math.min(10000, Math.round(vHigh * 0.07 / 100) * 100));
+  return {
+    vinyl:    { base: vBase,     high: vHigh },
+    cd:       { base: cBase,     high: cHigh },
+    cassette: { base: cassBase,  high: cassHigh },
+    source: "regression",
+    albumCount: 0,
+    canonicalName: null,
+  };
+}
+
+function projectStreams(spotifyListeners) {
+  // SOD multiplier p25/p75 from comp data, converted to stream-equivalent
+  const sodBase = spotifyListeners * 14;
+  const sodHigh = spotifyListeners * 35;
+  return { base: Math.round(sodBase * 0.7 / 1e6) * 1e6, high: Math.round(sodHigh * 1.0 / 1e6) * 1e6 };
+}
+
+// ── Default Rates ────────────────────────────────────────────────
+const DR = {
+  vinylMSRP:30, vinylCOG:6, cdMSRP:12, cdCOG:0.92, cassetteMSRP:15, cassetteCOG:3.2,
+  wholesaleShare:0.5, wholesaleDiscount:0.65, revenuePerStream:0.004,
+  merchASP:40, merchCOG:10, exhibitorTake:0.5, distributorTake:0.5,
+  mainfactorFee:0.15,
+  glasshausFee1:0.05, glasshausTier1Cap:4000000,
+  glasshausFee2:0.03, glasshausTier2Cap:6000000,
+  glasshausFee3:0.01,
+  orchardFee:0.15, salesAgentFee:0.10, salesAgentExpenses:15000,
+  camaFee1:0.009, camaTier1Cap:1500000,
+  camaFee2:0.007, camaTier2Cap:3000000,
+  camaFee3:0.005,
+  labelRoyalty:0.12,
+  budgetATL:116000, budgetBTL:1183990, budgetPost:245000, budgetDesign:55000,
+  budgetAlbumMfg:155000, budgetMerchMfg:250000, budgetMarketing:400000, budgetMgmtExpenses:294027,
+  trmDeferral:500000, trmPremium:100000, investorPremiumRate:0.20,
+  backendArtist:25, targetROAS:5,
+};
+const TOTAL_STANDARD_BUDGET =
+  DR.budgetATL + DR.budgetBTL + DR.budgetPost + DR.budgetDesign +
+  DR.budgetAlbumMfg + DR.budgetMerchMfg + DR.budgetMarketing + DR.budgetMgmtExpenses;
+
+const trmPts = (ba) => Math.max(0, 100 - 50 - ba);
+function glasshausFee(ntc, r) {
+  return Math.min(ntc,r.glasshausTier1Cap)*r.glasshausFee1
+    + Math.min(Math.max(0,ntc-r.glasshausTier1Cap),r.glasshausTier2Cap-r.glasshausTier1Cap)*r.glasshausFee2
+    + Math.max(0,ntc-r.glasshausTier2Cap)*r.glasshausFee3;
+}
+function camaFee(ntc, r) {
+  return Math.min(ntc,r.camaTier1Cap)*r.camaFee1
+    + Math.min(Math.max(0,ntc-r.camaTier1Cap),r.camaTier2Cap-r.camaTier1Cap)*r.camaFee2
+    + Math.max(0,ntc-r.camaTier2Cap)*r.camaFee3;
+}
+function run(s, r, budgetPct=1.0) {
+  // ── Setup ────────────────────────────────────────────────────────
+  r = {...DR, ...r};
+  s = {...s};
+  ["vinyl","cd","cassette","gbo","theatDistCost","pa","streamingSale","streams","merchUnits","artistFee","orchardDrawdown"].forEach(k=>{ s[k]=Number(s[k])||0; });
+  const sc = (v) => (Number(v)||0) * budgetPct;
+  const wV=Math.floor(s.vinyl*r.wholesaleShare),   dV=s.vinyl-wV;
+  const wC=Math.floor(s.cd*r.wholesaleShare),       dC=s.cd-wC;
+  const wK=Math.floor((s.cassette||0)*r.wholesaleShare), dK=(s.cassette||0)-wK;
+
+  // ── GROSS REVENUE PER CORRIDOR ───────────────────────────────────
+  const gT  = s.gbo;
+  const gS  = s.streamingSale;
+  const gD  = s.streams * r.revenuePerStream;
+  const gW  = wV*r.vinylMSRP*r.wholesaleDiscount + wC*r.cdMSRP*r.wholesaleDiscount + wK*r.cassetteMSRP*r.wholesaleDiscount;
+  const gDC = dV*r.vinylMSRP + dC*r.cdMSRP + dK*r.cassetteMSRP;
+  const gM  = s.merchUnits * r.merchASP;
+  const tG  = gT + gS + gD + gW + gDC + gM;
+
+  // ── NTC (NET TO CAMA) — verified against V6 Excel ───────────────
+  // Theatrical: GBO → exhibitor take → distributor net of costs → Glasshaus 50%
+  const theatNetProfit = Math.max(0, gT*(1-r.exhibitorTake) - s.theatDistCost - (s.pa ?? s.theatDistCost));
+  const tNC = theatNetProfit * (1-r.distributorTake);
+
+  // Streaming: full sale price enters NTC (Orchard dist fee & drawdown come AFTER GH fee)
+  const ntcStream = gS;
+
+  // Digital & Wholesale: gross − label royalty(12%) − Orchard dist fee(20%) − Orchard mktg drawdown
+  // Orchard drawdown split proportionally between dig and whl by gross revenue
+  const orchD = s.orchardDrawdown || 0;
+  const dr = (gD + gW) > 0 ? gD / (gD + gW) : 0.5;
+  const orchDDDig = orchD * dr;
+  const orchDDWhl = orchD * (1 - dr);
+  const labRoyRate = r.royaltyTopLine !== false ? r.labelRoyalty : 0;  // 0 when toggle OFF
+  const dNC_raw = gD  - gD*labRoyRate  - gD*r.orchardFee  - orchDDDig;
+  const wNC_raw = gW  - gW*labRoyRate  - gW*r.orchardFee  - orchDDWhl;
+  const dNC = Math.max(0, dNC_raw);   // clamp — drawdown can exceed channel; excess is unrecoverable
+  const wNC = Math.max(0, wNC_raw);
+
+  // D2C Physical: gross − label royalty(12%) − Mainfactor mgmt fee(15%)
+  const dcNC = gDC - gDC*labRoyRate - gDC*r.mainfactorFee;
+
+  // Merch: gross − Mainfactor mgmt fee(15%)
+  const mNC = gM - gM*r.mainfactorFee;
+
+  // ── CAMA FEE — aggregate step-down on sum of all positive NTCs ───
+  const tNTC = [tNC, ntcStream, dNC, wNC, dcNC, mNC].reduce((a,v) => a + Math.max(0,v), 0);
+  const cf = camaFee(tNTC, r);
+
+  // CAMA allocated proportionally to each positive-NTC corridor
+  const ntcCh = [tNC, ntcStream, dNC, wNC, dcNC, mNC];
+  const camaC = ntcCh.map(v => tNTC > 0 ? cf * (Math.max(0,v) / tNTC) : 0);
+
+  // ── SALES AGENT FEE — streaming only, computed on streaming net-of-CAMA ──
+  const camaStreamShare = camaC[1];
+  const sf  = (ntcStream - camaStreamShare) * r.salesAgentFee;
+  const saE = r.salesAgentExpenses;
+
+  // ── NET TO GLASSHAUS per corridor ────────────────────────────────
+  // Each corridor's contribution to the GH fee base
+  const ntgh = [
+    Math.max(0, tNC)  - camaC[0],                          // Theatrical
+    ntcStream - camaStreamShare - sf - saE,                 // Streaming (post-CAMA, post-SA)
+    dNC       - camaC[2],                                   // Digital
+    wNC       - camaC[3],                                   // Wholesale
+    Math.max(0, dcNC) - camaC[4],                          // D2C
+    Math.max(0, mNC)  - camaC[5],                          // Merch
+  ];
+  const totalNtGH = ntgh.reduce((a,v) => a + Math.max(0,v), 0);
+
+  // ── GLASSHAUS FEE — aggregate step-down: 5% on ≤$4M, 3% flat above $4M ──
+  // Tier 3 (1%) only kicks in for very large totals above glasshausTier2Cap
+  // Verified against V6: no 1% tier within the tested range (≤$6.5M NtGH)
+  const gf = glasshausFee(totalNtGH, r);
+
+  // GH allocated proportionally: each corridor × (gf / total5pctRef)
+  // where total5pctRef = each corridor's NtGH × 5% — this ratio gives correct per-corridor amount
+  const ref5 = ntgh.map(v => Math.max(0,v) * 0.05);
+  const tot5 = ref5.reduce((a,v) => a+v, 0);
+  const ghC  = ref5.map(v => tot5 > 0 ? gf * (v / tot5) : 0);
+
+  // ── COGs — only excess above budgeted mfg costs (budget is in production budget / investor principal) ──
+  // Album: (actual − budgeted) split 50/50 between wholesale and D2C
+  //        if budgeted > actual, no deduction (surplus stays in budget, not returned here)
+  const albumMfgTotal    = s.vinyl*r.vinylCOG + s.cd*r.cdCOG + (s.cassette||0)*r.cassetteCOG;
+  const albumCOGPerCh    = Math.max(0, (albumMfgTotal - sc(r.budgetAlbumMfg)) / 2);
+  // Merch: if actual > budgeted, deduct excess from merch NTI
+  //        if budgeted > actual, SURPLUS flows positively to merch NTI (= budget overage returned)
+  const merchMfgTotal    = (s.merchUnits||0) * r.merchCOG;
+  const merchCOGNet      = sc(r.budgetMerchMfg) - merchMfgTotal;  // positive = surplus, negative = overrun
+  const merchCOGDeducted = -Math.min(0, merchCOGNet);             // overrun amount (positive when excess)
+  const merchCOGSurplus  = Math.max(0, merchCOGNet);              // surplus amount (positive when under budget)
+
+  // ── POST-GH MARKETING DEDUCTION (new placeholder row) ───────────
+  // Applied AFTER the Glasshaus fee to dig/whl/d2c/merch corridors equally
+  // = max(0, neededMktg − budgetMarketing − orchardDrawdown) ÷ 4
+  // neededMktg = (grossDig + grossWhl + grossD2C + grossMerch) / targetROAS
+  const mktgGrossBase = gD + gW + gDC + gM;
+  const neededMktg    = mktgGrossBase / (r.targetROAS || 5);
+  const postGhMktgRemainder = Math.max(0, neededMktg - sc(r.budgetMarketing) - orchD);
+  const postGhMktgPerCh     = postGhMktgRemainder / 4;  // applied equally to dig, whl, d2c, merch
+
+  // ── PER-CHANNEL NTI (Net To Investors) ──────────────────────────
+  // Each channel floored at 0 — surplus budget or COG never creates negative investor flows
+  const ntis = {
+    theat:  Math.max(0, Math.max(0,tNC)   - camaC[0] - ghC[0]),
+    stream: Math.max(0, ntcStream - camaStreamShare - sf - saE - ghC[1]),
+    dig:    Math.max(0, dNC  - camaC[2] - ghC[2] - postGhMktgPerCh),
+    whl:    Math.max(0, wNC  - camaC[3] - ghC[3] - albumCOGPerCh - postGhMktgPerCh),
+    d2c:    Math.max(0, Math.max(0,dcNC)  - camaC[4] - ghC[4] - albumCOGPerCh - postGhMktgPerCh),
+    merch:  Math.max(0, Math.max(0,mNC)   - camaC[5] - ghC[5] + merchCOGSurplus - merchCOGDeducted - postGhMktgPerCh),
+  };
+  const nti = Object.values(ntis).reduce((a,v) => a+v, 0);
+
+  // ── PRODUCTION BUDGET & INVESTOR WATERFALL ───────────────────────
+  const tCOG = albumMfgTotal + merchMfgTotal;
+  const pb   = sc(r.budgetATL) + s.artistFee + sc(r.budgetBTL) + sc(r.budgetPost) + sc(r.budgetDesign)
+             + sc(r.budgetAlbumMfg) + sc(r.budgetMerchMfg) + sc(r.budgetMarketing) + sc(r.budgetMgmtExpenses);
+  const ip   = pb;
+  const iprem = ip * r.investorPremiumRate;
+  const aTRM = Math.max(0, nti - r.trmDeferral - r.trmPremium);
+  const tp   = trmPts(r.backendArtist);
+  const np   = Math.max(0, aTRM - ip - iprem);
+  const ib   = np * 0.50;
+  const ab   = np * (r.backendArtist / 100);
+  const tb   = np * (tp / 100);
+  const tir  = Math.min(aTRM, ip + iprem + ib);
+  const roi  = ip > 0 ? (tir - ip) / ip : 0;
+  const trafPA = s.pa ?? s.theatDistCost ?? 0;
+  const totalMarketing = sc(r.budgetMarketing) + orchD + trafPA;
+  const roas = totalMarketing > 0 ? mktgGrossBase / totalMarketing : 0;
+
+  const N = (v) => isNaN(v) || !isFinite(v) ? 0 : v;
+  return {
+    totalGross:N(tG), totalNTC:N(tNTC), netToInvestors:N(nti), totalInvestorReturn:N(tir), investorROI:N(roi),
+    investorPrincipal:N(ip), investorPremium:N(iprem), investorBackend:N(ib), netProceeds:N(np),
+    totalArtistIncome:N(s.artistFee + ab), totalTRMReturn:N(r.trmDeferral + r.trmPremium + tb),
+    totalFees:N(cf + sf + saE + gf), totalCOGs:N(tCOG), productionBudget:N(pb),
+    trmDeferred:N(r.trmDeferral), trmPremiumAmt:N(r.trmPremium), trmBackend:N(tb), trmBackendPts:N(tp),
+    artistBackend:N(ab), camaFeeAmt:N(cf), glasshausFeeAmt:N(gf), salesAgentFeeAmt:N(sf),
+    labelRoyaltyBackend:N(r.royaltyTopLine===false ? ab * r.labelRoyalty : 0),
+    royaltyTopLine: r.royaltyTopLine !== false,
+    orchDDDig:N(orchDDDig), orchDDWhl:N(orchDDWhl),
+    totalMarketing:N(totalMarketing), roas:N(roas), neededMktg:N(neededMktg), targetROAS:r.targetROAS||5,
+    postGhMktgRemainder:N(postGhMktgRemainder), postGhMktgPerCh:N(postGhMktgPerCh),
+    albumCOGPerCh:N(albumCOGPerCh), albumMfgActual:N(albumMfgTotal),
+    merchCOGDeducted:N(merchCOGDeducted), merchCOGSurplus:N(merchCOGSurplus), merchMfgActual:N(merchMfgTotal),
+    budgetLines:{atl:sc(r.budgetATL),btl:sc(r.budgetBTL),post:sc(r.budgetPost),design:sc(r.budgetDesign),albumMfg:sc(r.budgetAlbumMfg),merchMfg:sc(r.budgetMerchMfg),marketing:sc(r.budgetMarketing),mgmt:sc(r.budgetMgmtExpenses)},
+    revenueBreakdown:[
+      {name:"Theatrical",     gross:N(gT),  net:N(ntis.theat)},
+      {name:"Streaming Sale", gross:N(gS),  net:N(ntis.stream)},
+      {name:"Digital Streams",gross:N(gD),  net:N(ntis.dig)},
+      {name:"Wholesale",      gross:N(gW),  net:N(ntis.whl)},
+      {name:"D2C Physical",   gross:N(gDC), net:N(ntis.d2c)},
+      {name:"Merch",          gross:N(gM),  net:N(ntis.merch)},
+    ],
+    ntis:{theat:N(ntis.theat),stream:N(ntis.stream),dig:N(ntis.dig),whl:N(ntis.whl),d2c:N(ntis.d2c),merch:N(ntis.merch)},
+    // expose intermediates for BackendTab
+    _tNC:N(tNC), _ntcStream:N(ntcStream), _dNC:N(dNC), _wNC:N(wNC), _dcNC:N(dcNC), _mNC:N(mNC),
+    _camaC:camaC, _ghC:ghC, _ntgh:ntgh, _sf:N(sf), _saE:N(saE), _cf:N(cf),
+    _gT:N(gT),_gS:N(gS),_gD:N(gD),_gW:N(gW),_gDC:N(gDC),_gM:N(gM),
+    _orchDDDig:N(orchDDDig),_orchDDWhl:N(orchDDWhl),
+    _labRoyDig:N(gD*labRoyRate),_labRoyWhl:N(gW*labRoyRate),_labRoyD2C:N(gDC*labRoyRate),
+    _orchDistFeeDig:N(gD*r.orchardFee),_orchDistFeeWhl:N(gW*r.orchardFee),
+    _mfD2C:N(gDC*r.mainfactorFee),_mfMerch:N(gM*r.mainfactorFee),
+    _theatNetProfit:N(theatNetProfit),_distShare:N(theatNetProfit*r.distributorTake),
+  };
+}
+
+// ── Seed Data (from V6 xlsx Assumptions_Scenarios) ───────────────
+const SEED = {
+  "DOECHII — BASE":       {vinyl:50497,  cd:12973, cassette:5000, gbo:1057000,  theatDistCost:209000,pa:209000,streamingSale:1000000,streams:46772765,   merchUnits:16000,artistFee:1000000,orchardDrawdown:750000 },
+  "DOECHII — HIGH":      {vinyl:50497,  cd:12973, cassette:5000, gbo:2202000,  theatDistCost:209000,pa:209000,streamingSale:3000000,streams:482534683,  merchUnits:35000,artistFee:1500000,orchardDrawdown:750000 },
+  "TYLER — BASE":         {vinyl:4190,   cd:50176, cassette:5000, gbo:2070000,  theatDistCost:362000,pa:362000,streamingSale:2000000,streams:253389607,  merchUnits:32000,artistFee:1000000,orchardDrawdown:1000000},
+  "TYLER — HIGH":        {vinyl:382979, cd:195320,cassette:5000, gbo:4313000,  theatDistCost:362000,pa:362000,streamingSale:4000000,streams:1847207354, merchUnits:65000,artistFee:1000000,orchardDrawdown:1000000},
+  "KENDRICK — BASE":      {vinyl:150000, cd:50000, cassette:5000, gbo:2765000,  theatDistCost:467000,pa:467000,streamingSale:3000000,streams:2300000000, merchUnits:43000,artistFee:1000000,orchardDrawdown:1000000},
+  "KENDRICK — HIGH":     {vinyl:1000000,cd:840000,cassette:5000, gbo:5759000,  theatDistCost:467000,pa:467000,streamingSale:3000000,streams:10200000000,merchUnits:82000,artistFee:1000000,orchardDrawdown:1000000},
+  "RADIOHEAD — BASE":     {vinyl:68000,  cd:52000, cassette:5000, gbo:1013000,  theatDistCost:274000,pa:274000,streamingSale:1000000,streams:129051401,  merchUnits:40000,artistFee:200000, orchardDrawdown:250000 },
+  "RADIOHEAD — HIGH":    {vinyl:359000, cd:150000,cassette:5000, gbo:2111000,  theatDistCost:274000,pa:274000,streamingSale:3000000,streams:1191379105, merchUnits:76000,artistFee:1000000,orchardDrawdown:1000000},
+  "LANA DEL REY — BASE":  {vinyl:85000,  cd:50000, cassette:5000, gbo:4498000,  theatDistCost:410000,pa:410000,streamingSale:2000000,streams:359122572,  merchUnits:50000,artistFee:1000000,orchardDrawdown:600000 },
+  "LANA DEL REY — HIGH": {vinyl:970000, cd:536000,cassette:5000, gbo:9370000,  theatDistCost:410000,pa:410000,streamingSale:5000000,streams:5470349949, merchUnits:95000,artistFee:1000000,orchardDrawdown:1000000},
+  "EMINEM — BASE":        {vinyl:20000,  cd:50000, cassette:2000, gbo:6661000,  theatDistCost:532000,pa:532000,streamingSale:2000000,streams:1234195267, merchUnits:48000,artistFee:1000000,orchardDrawdown:1000000},
+  "EMINEM — HIGH":       {vinyl:180000, cd:200000,cassette:10000,gbo:15543000, theatDistCost:532000,pa:532000,streamingSale:5000000,streams:6145572264, merchUnits:90000,artistFee:1000000,orchardDrawdown:1000000},
+  "GEESE":               {vinyl:50000,  cd:20000, cassette:1000, gbo:2000000,  theatDistCost:150000,pa:150000,streamingSale:500000, streams:100000000,  merchUnits:22000,artistFee:200000, orchardDrawdown:200000 },
+};
+
+// ── Formatting ───────────────────────────────────────────────────
+const fmtD = (n) => {
+  if (n===null||n===undefined) return "—";
+  const a=Math.abs(n), neg=n<0;
+  let s = a>=1e6?"$"+(a/1e6).toFixed(2)+"M":a>=1e3?"$"+(a/1e3).toFixed(0)+"K":"$"+a.toFixed(0);
+  return neg?`(${s})`:s;
+};
+const fmtN = (n) => n==null?"—":Number(n).toLocaleString("en-US");
+const fmtPct = (n) => (n*100).toFixed(1)+"%";
+const fmtShort = (n) => {
+  if (!n&&n!==0) return "—";
+  const a=Math.abs(n);
+  if (a>=1e9) return (n/1e9).toFixed(2)+"B";
+  if (a>=1e6) return (n/1e6).toFixed(1)+"M";
+  if (a>=1e3) return (n/1e3).toFixed(0)+"K";
+  return String(n);
+};
+
+// ── UI Components ─────────────────────────────────────────────────
+function KPI({label,value,sub,accent,large}) {
+  return (
+    <div style={{background:T.bgCard,border:`1px solid ${T.border}`,borderRadius:7,padding:large?"16px 14px":"12px 13px"}}>
+      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:T.textDim,fontFamily:MN,marginBottom:5}}>{label}</div>
+      <div style={{fontSize:large?22:17,fontWeight:700,color:accent||T.gold,fontFamily:SR}}>{value}</div>
+      {sub&&<div style={{fontSize:11,color:T.textDim,fontFamily:MN,marginTop:3}}>{sub}</div>}
+    </div>
+  );
+}
+function WaterfallBar({label,value,max,color}) {
+  const pct=max>0?Math.min(100,(Math.abs(value)/max)*100):0;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+      <div style={{width:100,fontSize:12,color:T.textDim,textAlign:"right",flexShrink:0,fontFamily:MN}}>{label}</div>
+      <div style={{flex:1,height:16,background:T.bgDeep,borderRadius:3,overflow:"hidden"}}>
+        <div style={{width:pct+"%",height:"100%",background:color||T.gold,borderRadius:3,transition:"width 0.4s ease",opacity:0.7}}/>
+      </div>
+      <div style={{width:80,fontSize:14,color:value<0?T.red:(color||T.gold),textAlign:"right",flexShrink:0,fontFamily:MN,fontWeight:600}}>{fmtD(value)}</div>
+    </div>
+  );
+}
+function InputField({label,value,onChange,placeholder,note}) {
+  return (
+    <div style={{marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+        <label style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:T.textDim,fontFamily:MN}}>{label}</label>
+        {note&&<span style={{fontSize:11,color:T.textFaint,fontFamily:MN}}>{note}</span>}
+      </div>
+      <input value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}
+        style={{width:"100%",padding:"7px 10px",background:T.inputBg,border:`1px solid ${T.inputBorder}`,borderRadius:4,color:T.text,fontFamily:MN,fontSize:15,outline:"none",boxSizing:"border-box"}}/>
+    </div>
+  );
+}
+function Slider({label,value,onChange,min,max,step,fmt,fs}) {
+  const f=fs||12;
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+        <span style={{fontSize:f-2,color:T.textDim,fontFamily:MN,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
+        <span style={{fontSize:f-1,color:T.gold,fontFamily:MN,fontWeight:600}}>{fmt?fmt(value):value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))} style={{width:"100%",height:3}}/>
+    </div>
+  );
+}
+
+// ── Scenario Builder components ─────────────────────────────────────
+// ── Tooltip definitions ──────────────────────────────────────────
+const TIPS = {
+  spotifyFollowers:  "People who have actively clicked 'Follow' on the artist's Spotify profile. A stronger signal of dedicated fans vs. casual listeners. This single number is the primary driver of the GBO regression model (R²=95.2%).",
+  spotifyListeners:  "Monthly unique listeners on Spotify — everyone who played at least one track. Much larger than followers since it includes passive and algorithmic discovery. The follower-to-listener ratio reveals how dedicated the fanbase is.",
+  instagramFollowers:"Used to calibrate social scale and cross-platform audience size. Influences the merch infra score and helps estimate the theatrical merch purchase rate.",
+  touringTier:       "Estimated venue size the artist currently headlines. Stadium (100K+ cap) · Arena (10–20K) · Theater (1–3K) · Club (under 1K) · Festival · Inactive. Drives album sales multipliers and the volume of theatrical merch buyers.",
+  merchInfraScore:   "A 0–100 composite score representing how developed the artist's merchandise operation is. Higher scores reflect a dedicated D2C store, active fulfillment pipeline, and strong conversion history. Higher = better D2C conversion rates.",
+  depthBand:         "Fan Depth = Followers ÷ Monthly Listeners. A high ratio (≥0.65) means most listeners have actively followed — a superfan base that converts to merch and physical purchases at higher rates than passive streaming audiences.",
+  gbo:               "Gross Box Office — total ticket revenue from all theatrical screenings before any distributor splits. Projected via linear regression (R²=95.2%) from Spotify followers, calibrated against historical concert film performance data.",
+  distCost:          "Trafalgar's distribution and logistics costs: screen delivery, print materials, booking fees, and platform fees. Calculated automatically from projected screen count.",
+  pa:                "Print & Advertising — the theatrical marketing spend co-managed with Trafalgar. Defaults to equal distribution costs. Both are recouped from box office before any revenue reaches the backend.",
+  theatricalTickets: "Estimated tickets sold at cinemas, derived from the touring tier. Used specifically to calculate the theatrical merch conversion — the percentage of cinema attendees who also purchase merchandise.",
+  vinyl:             "Physical vinyl unit sales. Projected from Spotify followers and touring tier multiplier via Luminate live album comp data. Click either Base or High value to override.",
+  cd:                "Physical CD unit sales. Same model as vinyl, generally lower for contemporary artists. Click to override.",
+  cassette:          "Cassette units — a niche collector format. Modeled at 3% of vinyl base (conservative) to 7% of vinyl high (active cassette campaign with limited editions), capped at 10,000. Hip-hop and indie artists tend toward the higher end. Click to override.",
+  streams:           "Projected lifetime on-demand streams for the live album across all platforms. Derived from monthly listeners as a baseline. Generates royalty revenue at approximately $0.004 per stream.",
+  streamingSale:     "A one-time upfront licensing payment from a streaming platform (Netflix, HBO Max, etc.) for exclusive or windowed rights to the concert film. Defaults to $1M — adjust based on negotiated deal.",
+  orchardDrawdown:   "A marketing advance from The Orchard drawn against future album revenue. Available up to $1M. Recouped proportionally from digital streaming and wholesale income before other distributions.",
+  merchUnits:        "Total projected merch units sold across D2C (fans buying direct) and theatrical (cinema attendees). Multiplied by the $40 average selling price to get gross merch revenue.",
+  artistFee:         "A fixed upfront payment to the artist for their participation in The Round. Treated as a production cost — included in investor principal but excluded from budget scaling.",
+  budgetPct:         "Scales all production budget line items proportionally. 100% = the standard model budget. The artist fee is always excluded and stays fixed regardless of this setting.",
+};
+
+// ── Tooltip ──────────────────────────────────────────────────────
+// Uses viewport-fixed positioning so it can never be clipped by parent overflow
+function Tip({ id }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos]   = useState({ top:0, left:0 });
+  const btnRef = useRef(null);
+  const boxRef = useRef(null);
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      // Place below by default; if too low, flip above
+      const boxH = 140; // rough estimate
+      const above = (r.bottom + boxH + 20) > window.innerHeight;
+      const top = above ? r.top - boxH - 6 : r.bottom + 6;
+      setPos({ top, left: Math.min(Math.max(4, r.left), window.innerWidth - 284) });
+    }
+    setOpen(o => !o);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (btnRef.current && !btnRef.current.contains(e.target) &&
+          boxRef.current  && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  if (!TIPS[id]) return null;
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center" }}>
+      <button ref={btnRef} onClick={toggle}
+        style={{ background:"none", border:"none", cursor:"pointer", padding:"0 0 0 5px", color:open?T.gold:T.textFaint, fontSize:13, lineHeight:1, fontFamily:MN }}>?</button>
+      {open && (
+        <div ref={boxRef} style={{ position:"fixed", top:pos.top, left:pos.left, zIndex:9999, background:T.bg, border:`1px solid ${T.goldBorder}`, borderRadius:6, padding:"12px 14px", width:270, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", fontSize:16, color:T.textMid, fontFamily:SS, lineHeight:1.65 }}>
+          {TIPS[id]}
+        </div>
+      )}
+    </span>
+  );
+}
+
+// ── Field label ──────────────────────────────────────────────────
+function FL({ children, tipId }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", marginBottom:5 }}>
+      <span style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", color:T.textDim, fontFamily:MN }}>{children}</span>
+      {tipId && <Tip id={tipId}/>}
+    </div>
+  );
+}
+
+// ── Single editable number ───────────────────────────────────────
+function NumField({ label, tipId, value, onChange, note, prefix="", estimated=false }) {
+  const [editing, setEditing] = useState(false);
+  const [raw, setRaw] = useState("");
+  const commit = () => {
+    const n = Number(String(raw).replace(/[^0-9.-]/g,""));
+    if (!isNaN(n) && n >= 0) onChange(n);
+    setEditing(false);
+  };
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <FL tipId={tipId}>{label}</FL>}
+      {editing ? (
+        <input autoFocus value={raw} onChange={e=>setRaw(e.target.value)}
+          onBlur={commit} onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape") setEditing(false); }}
+          style={{ width:"100%", padding:"5px 8px", background:T.goldBg, border:`1px solid ${T.goldBorder}`, borderRadius:4, color:T.gold, fontFamily:MN, fontSize:13, outline:"none", boxSizing:"border-box" }}/>
+      ) : (
+        <div onClick={() => { setRaw(String(value||"")); setEditing(true); }}
+          style={{ padding:"5px 8px", background:estimated?T.redBg:T.inputBg, border:`1px solid ${estimated?T.red+"44":T.inputBorder}`, borderRadius:4, color:estimated?T.red:T.text, fontFamily:MN, fontSize:13, cursor:"text", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span>{value != null ? `${prefix}${Number(value).toLocaleString("en-US")}` : <span style={{ color:T.textFaint }}>—</span>}</span>
+          <span style={{ fontSize:12, color:estimated?T.red:T.textFaint, opacity:0.75 }}>{estimated?"verify":"edit"}</span>
+        </div>
+      )}
+      {note && <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>{note}</div>}
+    </div>
+  );
+}
+
+// ── Dual Base/High row ───────────────────────────────────────────
+// Each side shows the model value, click to override independently
+function DualField({ label, tipId, baseValue, highValue, onBaseChange, onHighChange, note }) {
+  const [editingBase, setEditingBase] = useState(false);
+  const [editingHigh, setEditingHigh] = useState(false);
+  const [rawBase, setRawBase] = useState("");
+  const [rawHigh, setRawHigh] = useState("");
+
+  const commitBase = () => {
+    const n = Number(String(rawBase).replace(/[^0-9.-]/g,""));
+    if (!isNaN(n) && n >= 0) onBaseChange(n);
+    setEditingBase(false);
+  };
+  const commitHigh = () => {
+    const n = Number(String(rawHigh).replace(/[^0-9.-]/g,""));
+    if (!isNaN(n) && n >= 0) onHighChange(n);
+    setEditingHigh(false);
+  };
+
+  const cell = (val, isHigh, editing, setEditing, raw, setRaw, commit) => {
+    const accent = isHigh ? T.highAccent : T.baseAccent;
+    const bg     = isHigh ? T.highBg     : T.baseBg;
+    const border = isHigh ? T.highBorder : T.baseBorder;
+    return (
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.1em", color:accent, fontFamily:MN, marginBottom:4, opacity:0.8 }}>
+          {isHigh ? "HIGH" : "BASE"}
+        </div>
+        {editing ? (
+          <input autoFocus value={raw} onChange={e=>setRaw(e.target.value)}
+            onBlur={commit} onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape") setEditing(false); }}
+            style={{ width:"100%", padding:"6px 9px", background:bg, border:`1px solid ${border}`, borderRadius:4, color:accent, fontFamily:MN, fontSize:13, outline:"none", boxSizing:"border-box" }}/>
+        ) : (
+          <div onClick={() => { setRaw(String(val||"")); setEditing(true); }}
+            style={{ padding:"6px 9px", background:bg, border:`1px solid ${border}`, borderRadius:4, color:accent, fontFamily:MN, fontSize:13, cursor:"text", fontWeight:600 }}>
+            {val != null ? Number(val).toLocaleString("en-US") : <span style={{ color:T.textFaint, fontWeight:400 }}>—</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ marginBottom:16 }}>
+      <FL tipId={tipId}>{label}</FL>
+      <div style={{ display:"flex", gap:8 }}>
+        {cell(baseValue, false, editingBase, setEditingBase, rawBase, setRawBase, commitBase)}
+        {cell(highValue, true,  editingHigh, setEditingHigh, rawHigh, setRawHigh, commitHigh)}
+      </div>
+      {note && <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>{note}</div>}
+    </div>
+  );
+}
+
+// ── Dual dollar field ────────────────────────────────────────────
+function DualDollarField({ label, tipId, baseValue, highValue, onBaseChange, onHighChange, note }) {
+  const [editingBase, setEditingBase] = useState(false);
+  const [editingHigh, setEditingHigh] = useState(false);
+  const [rawBase, setRawBase] = useState("");
+  const [rawHigh, setRawHigh] = useState("");
+  const commit = (raw, onChange, setEditing) => {
+    const n = Number(String(raw).replace(/[^0-9.-]/g,""));
+    if (!isNaN(n) && n >= 0) onChange(n);
+    setEditing(false);
+  };
+  const cell = (val, isHigh, editing, setEditing, raw, setRaw) => {
+    const accent = isHigh ? T.highAccent : T.baseAccent;
+    const bg     = isHigh ? T.highBg     : T.baseBg;
+    const border = isHigh ? T.highBorder : T.baseBorder;
+    const onChange = isHigh ? onHighChange : onBaseChange;
+    return (
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:12, textTransform:"uppercase", letterSpacing:"0.1em", color:accent, fontFamily:MN, marginBottom:4, opacity:0.8 }}>{isHigh?"HIGH":"BASE"}</div>
+        {editing ? (
+          <input autoFocus value={raw} onChange={e=>setRaw(e.target.value)}
+            onBlur={()=>commit(raw,onChange,setEditing)}
+            onKeyDown={e=>{ if(e.key==="Enter") commit(raw,onChange,setEditing); if(e.key==="Escape") setEditing(false); }}
+            style={{ width:"100%", padding:"6px 9px", background:bg, border:`1px solid ${border}`, borderRadius:4, color:accent, fontFamily:MN, fontSize:13, outline:"none", boxSizing:"border-box" }}/>
+        ) : (
+          <div onClick={()=>{ setRaw(String(val||"")); setEditing(true); }}
+            style={{ padding:"6px 9px", background:bg, border:`1px solid ${border}`, borderRadius:4, color:accent, fontFamily:MN, fontSize:13, cursor:"text", fontWeight:600 }}>
+            {val != null ? fmtD(val) : <span style={{ color:T.textFaint, fontWeight:400 }}>—</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+  return (
+    <div style={{ marginBottom:16 }}>
+      <FL tipId={tipId}>{label}</FL>
+      <div style={{ display:"flex", gap:8 }}>
+        {cell(baseValue, false, editingBase, setEditingBase, rawBase, setRawBase)}
+        {cell(highValue, true,  editingHigh, setEditingHigh, rawHigh, setRawHigh)}
+      </div>
+      {note && <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>{note}</div>}
+    </div>
+  );
+}
+
+// ── Read-only field ──────────────────────────────────────────────
+function ReadField({ label, tipId, value, note }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <FL tipId={tipId}>{label}</FL>}
+      <div style={{ padding:"7px 10px", background:T.bgDeep, border:`1px solid ${T.border}`, borderRadius:4, color:T.textDim, fontFamily:MN, fontSize:13 }}>{value}</div>
+      {note && <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>{note}</div>}
+    </div>
+  );
+}
+
+// ── Tag ──────────────────────────────────────────────────────────
+function Tag({ children, color }) {
+  return (
+    <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:3, fontSize:11, fontFamily:MN, background:color+"15", color, border:`1px solid ${color}28`, letterSpacing:"0.06em", textTransform:"uppercase" }}>
+      {children}
+    </span>
+  );
+}
+
+// ── Section ──────────────────────────────────────────────────────
+function Section({ children, style={} }) {
+  return (
+    <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:8, padding:"20px 22px", marginBottom:12, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function SH({ children, sub }) {
+  return (
+    <div style={{ marginBottom:12, paddingBottom:8, borderBottom:`1px solid ${T.border}` }}>
+      <div style={{ fontFamily:MN, fontSize:11, fontWeight:700, color:T.gold, textTransform:"uppercase", letterSpacing:"0.12em" }}>{children}</div>
+      {sub && <div style={{ fontSize:10, color:T.textDim, fontFamily:MN, marginTop:2, letterSpacing:"0.03em" }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Preview KPI pair ─────────────────────────────────────────────
+function KPIPair({ label, baseVal, highVal, fmtFn, baseAccent, highAccent }) {
+  const fmt = fmtFn || fmtD;
+  return (
+    <div style={{ background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:6, padding:"10px 12px" }}>
+      <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.12em", color:T.textDim, fontFamily:MN, marginBottom:6 }}>{label}</div>
+      <div style={{ display:"flex", gap:10 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:10, color:T.baseAccent, fontFamily:MN, marginBottom:2, opacity:0.8 }}>BASE</div>
+          <div style={{ fontSize:14, fontWeight:700, color:baseAccent||T.baseAccent, fontFamily:MN }}>{fmt(baseVal)}</div>
+        </div>
+        <div style={{ width:1, background:T.border }}/>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:10, color:T.highAccent, fontFamily:MN, marginBottom:2, opacity:0.8 }}>HIGH</div>
+          <div style={{ fontSize:14, fontWeight:700, color:highAccent||T.highAccent, fontFamily:MN }}>{fmt(highVal)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Derived signal row ───────────────────────────────────────────
+function DerivedSignal({ label, tipId, displayValue, displayColor, overrideContent, overridden, onOverride, onReset }) {
+  return (
+    <div style={{ padding:"9px 14px", borderBottom:`1px solid ${T.border}` }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:2 }}>
+          <span style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", color:T.textDim, fontFamily:MN }}>{label}</span>
+          <Tip id={tipId}/>
+        </div>
+        {!overridden ? (
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <Tag color={displayColor}>{displayValue}</Tag>
+            <button onClick={onOverride} style={{ fontSize:12, fontFamily:MN, color:T.textFaint, background:"none", border:`1px solid ${T.border}`, borderRadius:3, padding:"1px 6px", cursor:"pointer" }}>OVERRIDE</button>
+          </div>
+        ) : (
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            {overrideContent}
+            <button onClick={onReset} style={{ fontSize:12, fontFamily:MN, color:T.textFaint, background:"none", border:`1px solid ${T.border}`, borderRadius:3, padding:"1px 6px", cursor:"pointer" }}>AUTO</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Artist Lookup ────────────────────────────────────────────────
+async function lookupArtist(artistName) {
+  // Use web search tool so Claude looks up live data rather than recalling from training
+  const prompt = `Search the web for current Spotify and Instagram stats for the artist "${artistName}".
+
+Search for:
+1. "${artistName} spotify followers monthly listeners"
+2. "${artistName} instagram followers"
+
+Then return ONLY valid JSON with no other text or markdown:
+{"spotifyFollowers":NUMBER,"spotifyListeners":NUMBER,"instagramFollowers":NUMBER,"orchardDrawdown":NUMBER,"notes":"STRING"}
+
+Rules:
+- spotifyFollowers and spotifyListeners must come from actual search results, not your training data
+- orchardDrawdown = a conservative Orchard marketing drawdown estimate between 0-1000000
+- notes = 1-2 sentences on the artist's current momentum based on what you find
+- All NUMBER fields must be plain integers with no commas or symbols`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:1000,
+      tools:[{ type:"web_search_20250305", name:"web_search" }],
+      messages:[{ role:"user", content:prompt }]
+    })
+  });
+  const data = await response.json();
+  // Extract final text block — appears after tool use blocks
+  const textBlocks = (data.content || []).filter(b => b.type === "text");
+  const text = textBlocks[textBlocks.length - 1]?.text || "";
+  return JSON.parse(text.replace(/```json|```/g,"").trim());
+}
+
+// ════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ════════════════════════════════════════════════════════════════
+
+function ProjectionsBuilder({ onSave, onCancel }) {
+
+  // Lookup
+  const [artistName, setArtistName]   = useState("");
+  const [lookupState, setLookupState] = useState("idle");
+  const [lookupNotes, setLookupNotes] = useState("");
+  const [estimated, setEstimated] = useState({ followers:false, listeners:false, instagram:false });
+
+  // Platform data
+  const [spotifyFollowers,   setSpotifyFollowers]   = useState(null);
+  const [spotifyListeners,   setSpotifyListeners]   = useState(null);
+  const [instagramFollowers, setInstagramFollowers] = useState(null);
+
+  // Derived signal overrides
+  const [ovTour, setOvTour]   = useState(false);
+  const [ovInfra, setOvInfra] = useState(false);
+  const [manualTier, setManualTier]   = useState("arena");
+  const [manualInfra, setManualInfra] = useState(60);
+
+  // Theatrical — dual GBO (base uses model base, high uses breakout)
+  const [manualGboBase, setManualGboBase] = useState(null);
+  const [manualGboHigh, setManualGboHigh] = useState(null);
+  const [paOverridden, setPaOverridden]   = useState(false);
+  const [paValue, setPaValue]             = useState(null);
+
+  // Albums — dual overrides
+  const [manualVinylBase, setManualVinylBase] = useState(null);
+  const [manualVinylHigh, setManualVinylHigh] = useState(null);
+  const [manualCdBase, setManualCdBase]       = useState(null);
+  const [manualCdHigh, setManualCdHigh]       = useState(null);
+  const [manualCassetteBase, setManualCassetteBase] = useState(null);
+  const [manualCassetteHigh, setManualCassetteHigh] = useState(null);
+  const [manualStreamsBase, setManualStreamsBase] = useState(null);
+  const [manualStreamsHigh, setManualStreamsHigh] = useState(null);
+
+  // Streaming sale — dual
+  const [streamingSaleBase, setStreamingSaleBase] = useState(1000000);
+  const [streamingSaleHigh, setStreamingSaleHigh] = useState(2000000);
+
+  // Orchard drawdown — dual
+  const [orchardBase, setOrchardBase] = useState(250000);
+  const [orchardHigh, setOrchardHigh] = useState(500000);
+
+  // Merch — dual overrides
+  const [manualMerchBase, setManualMerchBase] = useState(null);
+  const [manualMerchHigh, setManualMerchHigh] = useState(null);
+
+  // Artist fee — dual
+  const [artistFeeBase, setArtistFeeBase] = useState(1000000);
+  const [artistFeeHigh, setArtistFeeHigh] = useState(1000000);
+
+  // Budget scale — dual
+  const [budgetPctBase, setBudgetPctBase] = useState(100);
+  const [budgetPctHigh, setBudgetPctHigh] = useState(100);
+
+  const hasData = lookupState === "done";
+  const sel = { width:"100%", padding:"5px 8px", background:T.inputBg, border:`1px solid ${T.inputBorder}`, borderRadius:4, color:T.text, fontFamily:MN, fontSize:12, outline:"none" };
+
+  // ── Derived signals ──────────────────────────────────────────
+  const touringTier = useMemo(() => {
+    if (ovTour) return manualTier;
+    if (spotifyListeners && instagramFollowers) return autoTouringTier(spotifyListeners, instagramFollowers);
+    return "arena";
+  }, [ovTour, manualTier, spotifyListeners, instagramFollowers]);
+
+  const infraScore = useMemo(() => {
+    if (ovInfra) return manualInfra;
+    if (spotifyListeners && instagramFollowers) return autoMerchInfraScore(spotifyListeners, instagramFollowers, touringTier);
+    return 60;
+  }, [ovInfra, manualInfra, spotifyListeners, instagramFollowers, touringTier]);
+
+  const depthBand = useMemo(() => {
+    if (!spotifyFollowers || !spotifyListeners) return "mid";
+    const r = spotifyFollowers / spotifyListeners;
+    return r >= 0.65 ? "high" : r >= 0.35 ? "mid" : "low";
+  }, [spotifyFollowers, spotifyListeners]);
+
+  // ── Model projections ────────────────────────────────────────
+  const theatProj  = useMemo(() => spotifyFollowers ? projectTheatrical(spotifyFollowers) : null, [spotifyFollowers]);
+  const albumProj  = useMemo(() => spotifyListeners ? projectAlbumSales(spotifyListeners, artistName) : null, [spotifyListeners, artistName]);
+  const streamProj = useMemo(() => spotifyListeners ? projectStreams(spotifyListeners) : null, [spotifyListeners]);
+  const merchProj  = useMemo(() => {
+    if (!spotifyFollowers || !spotifyListeners) return null;
+    return projectMerch({ spotifyFollowers, spotifyListeners, touringTier, instagramFollowers:instagramFollowers||0, merchInfraScore:infraScore, depthBand });
+  }, [spotifyFollowers, spotifyListeners, touringTier, instagramFollowers, infraScore, depthBand]);
+
+  // ── Effective values ─────────────────────────────────────────
+  const pa = paOverridden && paValue != null ? paValue : (theatProj?.distCost || 0);
+
+  // GBO: base scenario uses model base, high uses model breakout
+  const gboBase = manualGboBase ?? (theatProj?.baseGBO || 0);
+  const gboHigh = manualGboHigh ?? (theatProj?.breakoutGBO || 0);
+
+  const vinylBase   = manualVinylBase   ?? (albumProj?.vinyl.base  || 0);
+  const vinylHigh   = manualVinylHigh   ?? (albumProj?.vinyl.high  || 0);
+  const cdBase      = manualCdBase      ?? (albumProj?.cd.base     || 0);
+  const cdHigh      = manualCdHigh      ?? (albumProj?.cd.high     || 0);
+  const cassetteBase = manualCassetteBase ?? (albumProj?.cassette.base || 0);
+  const cassetteHigh = manualCassetteHigh ?? (albumProj?.cassette.high || 0);
+  const streamsBase = manualStreamsBase  ?? (streamProj?.base       || 0);
+  const streamsHigh = manualStreamsHigh  ?? (streamProj?.high       || 0);
+  const merchBase   = manualMerchBase   ?? (merchProj?.base        || 0);
+  const merchHigh   = manualMerchHigh   ?? (merchProj?.high        || 0);
+
+  // ── Build scenario objects ───────────────────────────────────
+  const buildScenario = (tier) => ({
+    vinyl:          tier === "base" ? vinylBase   : vinylHigh,
+    cd:             tier === "base" ? cdBase      : cdHigh,
+    cassette:       tier === "base" ? cassetteBase : cassetteHigh,
+    gbo:            tier === "base" ? gboBase     : gboHigh,
+    theatDistCost:  theatProj?.distCost || 0,
+    pa,
+    streamingSale:  tier === "base" ? streamingSaleBase : streamingSaleHigh,
+    streams:        tier === "base" ? streamsBase : streamsHigh,
+    merchUnits:     tier === "base" ? merchBase   : merchHigh,
+    artistFee:      tier === "base" ? artistFeeBase  : artistFeeHigh,
+    orchardDrawdown:tier === "base" ? orchardBase     : orchardHigh,
+  });
+
+  // ── Live results ─────────────────────────────────────────────
+  const resultBase = useMemo(() => {
+    const sc = {
+      vinyl:vinylBase, cd:cdBase, cassette:cassetteBase, gbo:gboBase,
+      theatDistCost:theatProj?.distCost||0, pa,
+      streamingSale:streamingSaleBase, streams:streamsBase,
+      merchUnits:merchBase, artistFee:artistFeeBase, orchardDrawdown:orchardBase,
+    };
+    return run(sc, DR, budgetPctBase / 100);
+  }, [vinylBase, cdBase, cassetteBase, gboBase, streamsBase, merchBase, artistFeeBase, orchardBase, streamingSaleBase, pa, theatProj, budgetPctBase]);
+
+  const resultHigh = useMemo(() => {
+    const sc = {
+      vinyl:vinylHigh, cd:cdHigh, cassette:cassetteHigh, gbo:gboHigh,
+      theatDistCost:theatProj?.distCost||0, pa,
+      streamingSale:streamingSaleHigh, streams:streamsHigh,
+      merchUnits:merchHigh, artistFee:artistFeeHigh, orchardDrawdown:orchardHigh,
+    };
+    return run(sc, DR, budgetPctHigh / 100);
+  }, [vinylHigh, cdHigh, cassetteHigh, gboHigh, streamsHigh, merchHigh, artistFeeHigh, orchardHigh, streamingSaleHigh, pa, theatProj, budgetPctHigh]);
+
+  // ── Lookup ───────────────────────────────────────────────────
+  const doLookup = useCallback(async () => {
+    if (!artistName.trim()) return;
+    setLookupState("loading");
+    try {
+      const d = await lookupArtist(artistName);
+      setSpotifyFollowers(d.spotifyFollowers);
+      setSpotifyListeners(d.spotifyListeners);
+      setInstagramFollowers(d.instagramFollowers);
+      if (d.notes) setLookupNotes(d.notes);
+      setEstimated({ followers:true, listeners:true, instagram:true });
+      // Reset all overrides
+      setEstimated({ followers:false, listeners:false, instagram:false });
+      setOvTour(false); setOvInfra(false);
+      setManualGboBase(null); setManualGboHigh(null);
+      setPaOverridden(false); setPaValue(null);
+      setManualVinylBase(null); setManualVinylHigh(null);
+      setManualCdBase(null); setManualCdHigh(null);
+      setManualCassetteBase(null); setManualCassetteHigh(null);
+      setManualStreamsBase(null); setManualStreamsHigh(null);
+      setManualMerchBase(null); setManualMerchHigh(null);
+      // Reset all dual financial defaults
+      setStreamingSaleBase(1000000); setStreamingSaleHigh(2000000);
+      setOrchardBase(250000);        setOrchardHigh(500000);
+      setArtistFeeBase(1000000);     setArtistFeeHigh(1000000);
+      setBudgetPctBase(100);         setBudgetPctHigh(100);
+      setLookupState("done");
+    } catch(e) {
+      console.error(e);
+      setLookupState("error");
+    }
+  }, [artistName]);
+
+  // ── Save — emits two scenario rows ──────────────────────────
+  const handleSave = () => {
+    if (!artistName.trim() || !resultBase) return;
+    const label = artistName.trim().toUpperCase();
+    onSave && onSave(`${label} — BASE`, buildScenario("base"));
+    onSave && onSave(`${label} — HIGH`, buildScenario("high"));
+  };
+
+  return (
+    <div style={{ fontFamily:MN, background:T.bgSub, minHeight:"100vh" }}>
+      <div style={{ maxWidth:680, margin:"0 auto", padding:"32px 20px 80px" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
+          <div>
+            <div style={{ fontFamily:MN, fontSize:14, fontWeight:700, color:T.gold, textTransform:"uppercase", letterSpacing:"0.12em" }}>New Scenario</div>
+            <div style={{ fontSize:10, color:T.textDim, fontFamily:MN, marginTop:2, letterSpacing:"0.08em", textTransform:"uppercase" }}>The Round — Artist Projection Builder</div>
+          </div>
+          {onCancel && <button onClick={onCancel} style={{ background:"none", border:"none", color:T.textDim, cursor:"pointer", fontSize:20 }}>✕</button>}
+        </div>
+
+        {/* Legend */}
+        {hasData && (
+          <div style={{ display:"flex", gap:12, marginBottom:10, padding:"6px 10px", background:T.bg, border:`1px solid ${T.border}`, borderRadius:6 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:10, height:10, borderRadius:2, background:T.baseBg, border:`1px solid ${T.baseBorder}` }}/>
+              <span style={{ fontSize:11, color:T.baseAccent, fontFamily:MN, letterSpacing:"0.08em" }}>BASE — conservative projection</span>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:10, height:10, borderRadius:2, background:T.highBg, border:`1px solid ${T.highBorder}` }}/>
+              <span style={{ fontSize:11, color:T.highAccent, fontFamily:MN, letterSpacing:"0.08em" }}>HIGH — optimistic projection</span>
+            </div>
+          </div>
+        )}
+
+        {/* ══ ARTIST ══ */}
+        <Section>
+          <SH sub="Enter an artist name to auto-populate all projection fields">Artist</SH>
+          <div style={{ display:"flex", gap:8 }}>
+            <input value={artistName} onChange={e=>setArtistName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&doLookup()}
+              placeholder="e.g. Phoebe Bridgers, Turnstile, Mk.gee…"
+              style={{ flex:1, padding:"10px 12px", background:T.inputBg, border:`1px solid ${T.inputBorder}`, borderRadius:5, color:T.text, fontFamily:SS, fontSize:12, outline:"none" }}/>
+            <button onClick={doLookup} disabled={lookupState==="loading"}
+              style={{ padding:"10px 20px", background:lookupState==="loading"?T.bgDeep:T.goldBg, border:`1px solid ${T.goldBorder}`, color:lookupState==="loading"?T.textDim:T.gold, borderRadius:5, fontFamily:MN, fontSize:11, cursor:lookupState==="loading"?"wait":"pointer", fontWeight:600, whiteSpace:"nowrap", letterSpacing:"0.05em" }}>
+              {lookupState==="loading" ? "LOOKING UP…" : "LOOKUP →"}
+            </button>
+          </div>
+          {lookupState==="error" && <div style={{ marginTop:10, fontSize:11, color:T.red, fontFamily:MN }}>Lookup failed — enter data manually below.</div>}
+          {lookupNotes && (
+            <div style={{ marginTop:12, padding:"10px 13px", background:T.goldBg, border:`1px solid ${T.goldBorder}`, borderRadius:5, fontSize:11, color:T.textMid, fontFamily:SS, lineHeight:1.65 }}>
+              {lookupNotes}
+            </div>
+          )}
+
+          {hasData && (
+            <div style={{ marginTop:18 }}>
+              <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.12em", color:T.textDim, fontFamily:MN, marginBottom:10 }}>Platform Data</div>
+              <div style={{ marginBottom:6, fontSize:11, color:T.red, fontFamily:MN, display: estimated.followers||estimated.listeners||estimated.instagram ? "flex" : "none", alignItems:"center", gap:6 }}>
+                <span style={{ background:T.redBg, border:`1px solid ${T.red}30`, borderRadius:3, padding:"1px 7px", fontSize:12, letterSpacing:"0.06em" }}>ESTIMATED</span>
+                <span style={{ color:T.textDim }}>These numbers are approximate — edit any field to confirm it.</span>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:18 }}>
+                <NumField label="Spotify Followers" tipId="spotifyFollowers" value={spotifyFollowers}
+                  onChange={v=>{ setSpotifyFollowers(v); setEstimated(e=>({...e,followers:false})); }}
+                  estimated={estimated.followers}/>
+                <NumField label="Monthly Listeners" tipId="spotifyListeners" value={spotifyListeners}
+                  onChange={v=>{ setSpotifyListeners(v); setEstimated(e=>({...e,listeners:false})); }}
+                  estimated={estimated.listeners}/>
+                <NumField label="Instagram Followers" tipId="instagramFollowers" value={instagramFollowers}
+                  onChange={v=>{ setInstagramFollowers(v); setEstimated(e=>({...e,instagram:false})); }}
+                  estimated={estimated.instagram}/>
+              </div>
+
+              <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.12em", color:T.textDim, fontFamily:MN, marginBottom:10 }}>Auto-Derived Signals</div>
+              <div style={{ background:T.bgDeep, borderRadius:6, overflow:"hidden" }}>
+                <DerivedSignal label="Touring Tier" tipId="touringTier"
+                  displayValue={touringTier} displayColor={T.blue}
+                  overridden={ovTour}
+                  onOverride={() => { setManualTier(touringTier); setOvTour(true); }}
+                  onReset={() => setOvTour(false)}
+                  overrideContent={
+                    <select value={manualTier} onChange={e=>setManualTier(e.target.value)} style={{ ...sel, width:"auto" }}>
+                      {["stadium","arena","theater","club","festival","inactive"].map(t=><option key={t} value={t}>{t}</option>)}
+                    </select>
+                  }
+                />
+                <DerivedSignal label="Merch Infra Score" tipId="merchInfraScore"
+                  displayValue={`${infraScore}/100`} displayColor={T.purple}
+                  overridden={ovInfra}
+                  onOverride={() => { setManualInfra(infraScore); setOvInfra(true); }}
+                  onReset={() => setOvInfra(false)}
+                  overrideContent={
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <input type="range" min={0} max={100} step={5} value={manualInfra} onChange={e=>setManualInfra(Number(e.target.value))} style={{ width:90 }}/>
+                      <span style={{ fontFamily:MN, fontSize:12, color:T.gold, minWidth:26 }}>{manualInfra}</span>
+                    </div>
+                  }
+                />
+                <div style={{ padding:"9px 14px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:2 }}>
+                      <span style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", color:T.textDim, fontFamily:MN }}>Fan Depth</span>
+                      <Tip id="depthBand"/>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <Tag color={T.green}>{depthBand}</Tag>
+                      {spotifyFollowers && spotifyListeners && (
+                        <span style={{ fontSize:11, color:T.textFaint, fontFamily:MN }}>{((spotifyFollowers/spotifyListeners)*100).toFixed(0)}% ratio</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ══ THEATRICAL ══ */}
+        {hasData && theatProj && (
+          <Section>
+            <SH sub="Base = model baseline · High = breakout scenario">Theatrical</SH>
+            <DualDollarField label="Gross Box Office" tipId="gbo"
+              baseValue={gboBase} highValue={gboHigh}
+              onBaseChange={setManualGboBase} onHighChange={setManualGboHigh}
+              note={`Base: model R²=95.2% · High: ×${theatProj.bMult.toFixed(2)} breakout · ${fmtN(theatProj.screens)} screens`}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <ReadField label="Distribution Cost" tipId="distCost"
+                value={fmtD(theatProj.distCost)} note={`${fmtN(theatProj.screens)} screens`}/>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
+                  <FL tipId="pa">P&A</FL>
+                  {paOverridden
+                    ? <button onClick={()=>{setPaOverridden(false);setPaValue(null);}} style={{ fontSize:12, fontFamily:MN, color:T.textFaint, background:"none", border:`1px solid ${T.border}`, borderRadius:3, padding:"1px 6px", cursor:"pointer" }}>RESET TO AUTO</button>
+                    : <button onClick={()=>{setPaValue(theatProj.distCost);setPaOverridden(true);}} style={{ fontSize:12, fontFamily:MN, color:T.textFaint, background:"none", border:`1px solid ${T.border}`, borderRadius:3, padding:"1px 6px", cursor:"pointer" }}>OVERRIDE</button>
+                  }
+                </div>
+                {paOverridden
+                  ? <NumField value={paValue} onChange={v=>{setPaValue(v);setPaOverridden(true);}} prefix="$" note="Manual P&A override"/>
+                  : <div style={{ padding:"7px 10px", background:T.bgDeep, border:`1px solid ${T.border}`, borderRadius:4, color:T.textDim, fontFamily:MN, fontSize:12, display:"flex", justifyContent:"space-between" }}>
+                      <span>{fmtD(theatProj.distCost)}</span>
+                      <span style={{ fontSize:11, color:T.textFaint }}>= dist. cost</span>
+                    </div>
+                }
+                {!paOverridden && <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>Mirrors distribution cost automatically</div>}
+              </div>
+            </div>
+            <ReadField label="Theatrical Tickets (merch calc)" tipId="theatricalTickets"
+              value={fmtN(TOURING_TICKETS[touringTier]||15000)} note={`Derived from ${touringTier} touring tier`}/>
+          </Section>
+        )}
+
+        {/* ══ ALBUMS & STREAMS ══ */}
+        {hasData && albumProj && (
+          <Section>
+            <SH sub={albumProj?.source === "comp" ? `Luminate data · ${albumProj.albumCount} albums for ${albumProj.canonicalName} · click to override` : "Regression model (artist not in comp set) · click to override"}>Albums & Streams</SH>
+            <DualField label="Vinyl Units" tipId="vinyl"
+              baseValue={vinylBase} highValue={vinylHigh}
+              onBaseChange={setManualVinylBase} onHighChange={setManualVinylHigh}
+            />
+            <DualField label="CD Units" tipId="cd"
+              baseValue={cdBase} highValue={cdHigh}
+              onBaseChange={setManualCdBase} onHighChange={setManualCdHigh}
+            />
+            <DualField label="Cassette Units" tipId="cassette"
+              baseValue={cassetteBase} highValue={cassetteHigh}
+              onBaseChange={setManualCassetteBase} onHighChange={setManualCassetteHigh}
+              note={`3% of vinyl base → high · capped at 10,000 · click to override`}
+            />
+            <DualField label="Streams (Lifetime)" tipId="streams"
+              baseValue={streamsBase} highValue={streamsHigh}
+              onBaseChange={setManualStreamsBase} onHighChange={setManualStreamsHigh}
+            />
+            <div style={{ marginTop:4, paddingTop:14, borderTop:`1px solid ${T.border}` }}>
+              <DualDollarField label="Streaming Sale" tipId="streamingSale"
+                baseValue={streamingSaleBase} highValue={streamingSaleHigh}
+                onBaseChange={setStreamingSaleBase} onHighChange={setStreamingSaleHigh}
+                note="One-time streaming rights deal"/>
+              <DualDollarField label="Orchard Drawdown" tipId="orchardDrawdown"
+                baseValue={orchardBase} highValue={orchardHigh}
+                onBaseChange={setOrchardBase} onHighChange={setOrchardHigh}
+                note="Marketing advance against album revenue · max $1M"/>
+            </div>
+          </Section>
+        )}
+
+        {/* ══ MERCH ══ */}
+        {hasData && merchProj && (
+          <Section>
+            <SH sub="D2C + theatrical conversion model · click to override">Merch</SH>
+            <DualField label="Merch Units" tipId="merchUnits"
+              baseValue={merchBase} highValue={merchHigh}
+              onBaseChange={setManualMerchBase} onHighChange={setManualMerchHigh}
+              note={`Fan depth: ${depthBand} · Infra score: ${infraScore}/100 · $40 ASP → Base ${fmtD(merchBase*40)} · High ${fmtD(merchHigh*40)}`}
+            />
+          </Section>
+        )}
+
+        {/* ══ FINANCIALS ══ */}
+        {hasData && (
+          <Section>
+            <SH sub="Separate values for Base and High scenarios">Financials</SH>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:2, marginBottom:10 }}>
+                <span style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", color:T.textDim, fontFamily:MN }}>Artist Fee</span>
+                <Tip id="artistFee"/>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                    <div style={{ fontSize:12, color:T.baseAccent, fontFamily:MN, opacity:0.8 }}>BASE</div>
+                    <div style={{ fontFamily:MN, fontSize:12, color:T.baseAccent, fontWeight:600 }}>{fmtD(artistFeeBase)}</div>
+                  </div>
+                  <input type="range" min={0} max={4000000} step={50000} value={artistFeeBase}
+                    onChange={e=>setArtistFeeBase(Number(e.target.value))}
+                    style={{ width:"100%", height:3, accentColor:T.baseAccent }}/>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.textFaint, fontFamily:MN, marginTop:4 }}>
+                    <span>$0</span><span>$500K</span><span>$1M</span><span>$2M</span><span>$3M</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                    <div style={{ fontSize:12, color:T.highAccent, fontFamily:MN, opacity:0.8 }}>HIGH</div>
+                    <div style={{ fontFamily:MN, fontSize:12, color:T.highAccent, fontWeight:600 }}>{fmtD(artistFeeHigh)}</div>
+                  </div>
+                  <input type="range" min={0} max={4000000} step={50000} value={artistFeeHigh}
+                    onChange={e=>setArtistFeeHigh(Number(e.target.value))}
+                    style={{ width:"100%", height:3, accentColor:T.highAccent }}/>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:T.textFaint, fontFamily:MN, marginTop:4 }}>
+                    <span>$0</span><span>$500K</span><span>$1M</span><span>$2M</span><span>$3M</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:4 }}>Fixed upfront payment — excluded from budget scaling</div>
+            </div>
+            {/* Budget scale — Base */}
+            <div style={{ marginBottom:18 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:2 }}>
+                  <span style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", color:T.textDim, fontFamily:MN }}>Production Budget Scale</span>
+                  <Tip id="budgetPct"/>
+                </div>
+                <div style={{ display:"flex", gap:20 }}>
+                  <span style={{ fontFamily:MN, fontSize:12, color:T.baseAccent }}><span style={{ fontSize:12, opacity:0.7 }}>BASE </span>{budgetPctBase}%</span>
+                  <span style={{ fontFamily:MN, fontSize:12, color:T.highAccent }}><span style={{ fontSize:12, opacity:0.7 }}>HIGH </span>{budgetPctHigh}%</span>
+                </div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:12, color:T.baseAccent, fontFamily:MN, marginBottom:4, opacity:0.8 }}>BASE</div>
+                  <input type="range" min={25} max={150} step={5} value={budgetPctBase}
+                    onChange={e=>setBudgetPctBase(Number(e.target.value))}
+                    style={{ width:"100%", height:3, accentColor:T.baseAccent }}/>
+                  <div style={{ padding:"7px 10px", background:T.baseBg, border:`1px solid ${T.baseBorder}`, borderRadius:4, fontFamily:MN, fontSize:11, color:T.baseAccent, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                    <span>{budgetPctBase}% of standard</span>
+                    <span><strong>{fmtD(TOTAL_STANDARD_BUDGET * budgetPctBase / 100)}</strong><span style={{ color:T.textFaint, fontSize:11 }}> + {fmtD(artistFeeBase)} fee</span></span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:12, color:T.highAccent, fontFamily:MN, marginBottom:4, opacity:0.8 }}>HIGH</div>
+                  <input type="range" min={25} max={150} step={5} value={budgetPctHigh}
+                    onChange={e=>setBudgetPctHigh(Number(e.target.value))}
+                    style={{ width:"100%", height:3, accentColor:T.highAccent }}/>
+                  <div style={{ padding:"7px 10px", background:T.highBg, border:`1px solid ${T.highBorder}`, borderRadius:4, fontFamily:MN, fontSize:11, color:T.highAccent, marginTop:6, display:"flex", justifyContent:"space-between" }}>
+                    <span>{budgetPctHigh}% of standard</span>
+                    <span><strong>{fmtD(TOTAL_STANDARD_BUDGET * budgetPctHigh / 100)}</strong><span style={{ color:T.textFaint, fontSize:11 }}> + {fmtD(artistFeeHigh)} fee</span></span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:T.textFaint, fontFamily:MN, marginTop:6 }}>
+                <span>25% lean</span><span>100% standard</span><span>150% heavy</span>
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {/* ══ PREVIEW ══ */}
+        {resultBase && resultHigh && (
+          <Section style={{ border:`1px solid ${T.borderMid}`, background:T.bgCard }}>
+            <SH sub="Recalculates live with every change">Preview</SH>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+              <KPIPair label="Gross Revenue"     baseVal={resultBase.totalGross}     highVal={resultHigh.totalGross}/>
+              <KPIPair label="Production Budget" baseVal={resultBase.productionBudget} highVal={resultHigh.productionBudget} baseAccent={T.baseAccent} highAccent={T.highAccent}/>
+              <KPIPair label="Net to Investors"  baseVal={resultBase.netToInvestors}  highVal={resultHigh.netToInvestors}
+                baseAccent={resultBase.netToInvestors>0?T.blue:T.red} highAccent={resultHigh.netToInvestors>0?T.purple:T.red}/>
+              <KPIPair label="Investor ROI"
+                baseVal={resultBase.investorROI} highVal={resultHigh.investorROI}
+                fmtFn={v=>(v*100).toFixed(1)+"%"}
+                baseAccent={resultBase.investorROI>=0?T.green:T.red}
+                highAccent={resultHigh.investorROI>=0?T.green:T.red}/>
+            </div>
+
+            {/* Save — two rows */}
+            <div style={{ background:T.bgDeep, borderRadius:6, padding:"12px 14px", marginBottom:12, fontSize:11, color:T.textDim, fontFamily:MN, lineHeight:1.7 }}>
+              Saving will add two scenario rows to the model:
+              <div style={{ marginTop:6, display:"flex", gap:12 }}>
+                <span style={{ color:T.baseAccent, fontWeight:600 }}>{artistName.trim().toUpperCase()} — BASE</span>
+                <span style={{ color:T.textFaint }}>+</span>
+                <span style={{ color:T.highAccent, fontWeight:600 }}>{artistName.trim().toUpperCase()} — HIGH</span>
+              </div>
+            </div>
+            <button onClick={handleSave}
+              style={{ width:"100%", padding:"12px", background:T.goldBg, border:`1px solid ${T.goldBorder}`, color:T.gold, borderRadius:5, fontFamily:MN, fontSize:12, cursor:"pointer", fontWeight:700, letterSpacing:"0.07em" }}>
+              SAVE BOTH SCENARIOS →
+            </button>
+          </Section>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── Backend Tab — faithful recreation of Episode Model-Master-V6 ─
+function BackendTab({ s, r, budgetPct, royaltyTopLine=true, onToggleRoyalty }) {
+  const res = useMemo(() => run(s, r, budgetPct / 100), [s, r, budgetPct]);
+
+  // ── Pull all intermediates directly from run() — single source of truth ──
+  const gbo          = s.gbo || 0;
+  const exhibTake    = res._gT * r.exhibitorTake;
+  const netProfit    = res._theatNetProfit;
+  const distShare    = res._distShare;
+  const ntcTheat     = res._tNC;
+  const streamSale   = res._gS;
+  const ntcStream    = res._ntcStream;
+  const grossDig     = res._gD;
+  const grossWhl     = res._gW;
+  const grossD2C     = res._gDC;
+  const grossMerch   = res._gM;
+  const orchD        = s.orchardDrawdown || 0;
+  const labRoyDig    = res._labRoyDig;
+  const orchFeeDig   = res._orchDistFeeDig;
+  const orchDDDig    = res._orchDDDig;
+  const ntcDig       = res._dNC;
+  const labRoyWhl    = res._labRoyWhl;
+  const orchFeeWhl   = res._orchDistFeeWhl;
+  const orchDDWhl    = res._orchDDWhl;
+  const ntcWhl       = res._wNC;
+  const labRoyD2C    = res._labRoyD2C;
+  const mfD2C        = res._mfD2C;
+  const ntcD2C       = res._dcNC;
+  const mfMerch      = res._mfMerch;
+  const ntcMerch     = res._mNC;
+  const allNTCPos    = res.totalNTC;
+  const camaFee      = res.camaFeeAmt;
+  const ghFee        = res.glasshausFeeAmt;
+  const camaStreamShare = res._camaC?.[1] ?? 0;
+  const saFee        = res._sf;
+  const saExp        = res._saE;
+  const sc           = v => (Number(v)||0) * (budgetPct/100);
+  const albumMfgTotal = res.albumMfgActual;
+  const merchMfgTotal = res.merchMfgActual;
+  const budgAlbumMfg  = sc(r.budgetAlbumMfg);
+  const budgMerchMfg  = sc(r.budgetMerchMfg);
+  const budgMktg      = sc(r.budgetMarketing);
+  const albumCOGPerCh = res.albumCOGPerCh;
+  const merchCOGDeducted = res.merchCOGDeducted;
+  const merchCOGSurplus  = res.merchCOGSurplus;
+  const postGhMktgPerCh  = res.postGhMktgPerCh;
+  const postGhMktgRemainder = res.postGhMktgRemainder;
+  const prodBudget    = res.productionBudget;
+  const trmDef        = r.trmDeferral;
+  const totalNTC      = res.totalNTC;
+  const totalGross    = res.totalGross;
+  const nti           = res.netToInvestors;
+  const netProc       = res.netProceeds;
+  const invReturn     = res.totalInvestorReturn;
+  const invROI        = res.investorROI;
+  const artBack       = res.artistBackend;
+  const trmBack       = res.trmBackend;
+  const trmPts        = res.trmBackendPts;
+  const legalBack     = netProc * 0.01;
+  const talentBack    = netProc * 0.0125;
+  const labRoyTotal   = labRoyDig + labRoyWhl + labRoyD2C;
+  const mktgGrossBase = grossDig + grossWhl + grossD2C + grossMerch;
+  const neededMktg    = mktgGrossBase / (r.targetROAS || 5);
+  const totalMktg     = budgMktg + orchD + (s.pa ?? s.theatDistCost ?? 0);
+  const ntcToGross    = totalGross>0 ? totalNTC/totalGross : 0;
+  const ntiToNTC      = totalNTC>0  ? nti/totalNTC : 0;
+  const ntiToGross    = totalGross>0 ? nti/totalGross : 0;
+  const ntis          = res.ntis || {theat:0,stream:0,dig:0,whl:0,d2c:0,merch:0};
+
+  // ── Local aliases for gross revenue detail rows ───────────────────
+  const totalVinyl   = s.vinyl || 0;
+  const totalCD      = s.cd || 0;
+  const totalCassette = s.cassette || 0;
+  const wV = Math.floor(totalVinyl * r.wholesaleShare);    const dV = totalVinyl - wV;
+  const wC = Math.floor(totalCD * r.wholesaleShare);       const dC = totalCD - wC;
+  const wK = Math.floor(totalCassette * r.wholesaleShare); const dK = totalCassette - wK;
+  const vinylWhl = wV * r.vinylMSRP * r.wholesaleDiscount;
+  const cdWhl    = wC * r.cdMSRP * r.wholesaleDiscount;
+  const cassWhl  = wK * r.cassetteMSRP * r.wholesaleDiscount;
+  const vinylD2C = dV * r.vinylMSRP;
+  const cdD2C    = dC * r.cdMSRP;
+  const cassD2C  = dK * r.cassetteMSRP;
+  const streams  = s.streams || 0;
+  const artistFee = s.artistFee || 0;
+  const orchardOverage = 0;   // replaced by postGhMktgRemainder — kept for compat
+  const wsRatio = (grossWhl+grossDig)>0 ? grossWhl/(grossWhl+grossDig) : 0;
+
+  // ── Formatters ───────────────────────────────────────────────────
+  const $  = n => { if(n==null) return "—"; const a=Math.abs(n),neg=n<0,s="$"+Math.round(a).toLocaleString("en-US"); return neg?`(${s})`:s; };
+  const pv = n => n==null?"—":(n*100).toFixed(2)+"%";
+  const nv = n => n==null?"—":Math.round(n).toLocaleString("en-US");
+  const dp = (n,p=2) => n==null?"—":Number(n).toFixed(p);
+
+  // ── Style tokens ─────────────────────────────────────────────────
+  const F   = MN;
+  const RH  = "20px";
+  // Shared cell base
+  const cb  = { fontFamily:F, fontSize:12, whiteSpace:"nowrap", lineHeight:RH, padding:"0 5px" };
+  const cbl = { ...cb, textAlign:"left" };
+  const cbr = { ...cb, textAlign:"right" };
+  const dim = { ...cb, color:"#888", fontSize:11 };
+  const red = { color:"#b00" };
+
+  // Section/header backgrounds
+  const BG = { sec:"#c6c6c6", hl1:"#fff2cc", hl2:"#e2efda", hl3:"#d9d9d9", odd:"#f7f7f5", even:"#ffffff", ntc:"#f0f5ff" };
+
+  // Channel header colors
+  const CH = [
+    { bg:"#d6dce4", bd:"#adb9ca" },  // theatrical
+    { bg:"#fce4d6", bd:"#f4c7b0" },  // streaming
+    { bg:"#fff2cc", bd:"#ffe699" },  // digital
+    { bg:"#e2efda", bd:"#c6e0b4" },  // wholesale
+    { bg:"#dae3f3", bd:"#b8cce4" },  // d2c
+    { bg:"#f8cbad", bd:"#f4b183" },  // merch
+  ];
+
+  const chHdr = (i, label) => ({
+    ...cb, background:CH[i].bg, textAlign:"center", fontWeight:700, fontSize:11,
+    textTransform:"uppercase", letterSpacing:"0.07em",
+    borderLeft:`1px solid ${CH[i].bd}`, borderBottom:`1px solid ${CH[i].bd}`,
+    padding:"2px 4px",
+  });
+
+  // Helpers for building rows
+  // aRow: label cell spanning col 1+2, then 6 empty channel cells
+  const mkRow = (cells, bg=BG.even) => (
+    <tr style={{ height:RH, background:bg, borderBottom:"1px solid #ebebeb" }}>
+      {cells}
+    </tr>
+  );
+
+  // Left assumption label + value (spans cols 1-2 via sub-cells)
+  const aL = (txt, style={}) => <td style={{ ...cbl, ...style }}>{txt}</td>;
+  const aR = (txt, style={}) => <td style={{ ...cbr, minWidth:75, ...style }}>{txt}</td>;
+  const blank = (n=6) => Array(n).fill(null).map((_,i)=><td key={i}/>);
+
+  // Right channel cell
+  const ch = (txt, style={}) => <td style={{ ...cbr, ...style }}>{txt}</td>;
+  const chL = (txt, style={}) => <td style={{ ...cbl, fontSize:11, ...style }}>{txt}</td>;
+
+  // Section header row — full width
+  const secHdr = (label, cols=8) => (
+    <tr style={{ background:BG.sec }}>
+      <td colSpan={cols} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", padding:"2px 5px", borderTop:"1px solid #aaa", borderBottom:"1px solid #aaa" }}>
+        {label}
+      </td>
+    </tr>
+  );
+
+  // Channel sub-header row (partner labels)
+  const partnerHdr = (labels) => (
+    <tr style={{ background:BG.hl3 }}>
+      <td colSpan={2} style={{ ...cbl, fontSize:11, fontWeight:700, padding:"1px 5px", borderBottom:"1px solid #bbb" }}/>
+      {labels.map((l,i)=><td key={i} style={{ ...cbl, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", padding:"1px 4px", borderBottom:"1px solid #bbb", background:CH[i].bg }}>{l}</td>)}
+    </tr>
+  );
+
+  return (
+    <div style={{ fontFamily:F, fontSize:12, color:"#111", background:T.bg, padding:"10px 16px 40px" }}>
+
+      {/* PAGE HEADER */}
+      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:10, marginBottom:10, paddingBottom:6, borderBottom:"2px solid #ccc" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+          <span style={{ fontFamily:F, fontSize:14, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase" }}>Episode Model — Master V6</span>
+          <span style={{ fontFamily:F, fontSize:11, color:"#999", letterSpacing:"0.1em" }}>· Backend Reference · Live from Selected Scenario</span>
+        </div>
+        {onToggleRoyalty&&(
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontFamily:F, fontSize:10, color:"#666", textTransform:"uppercase", letterSpacing:"0.08em" }}>Label Royalty:</span>
+            <button onClick={onToggleRoyalty} style={{ padding:"3px 10px", fontSize:10, fontFamily:F, fontWeight:700, letterSpacing:"0.06em", background:royaltyTopLine?"#b03030":"#1a6e3a", color:"#fff", border:"none", borderRadius:3, cursor:"pointer" }}>
+              {royaltyTopLine?"TOP-LINE":"BACKEND"}
+            </button>
+            <span style={{ fontFamily:F, fontSize:10, color:"#888" }}>{royaltyTopLine?"off gross (Dig/Whl/D2C)":"12% of artist backend"}</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── TOP BLOCK: KPI (left) + Revenue to Investors (right) ── */}
+      <div style={{ display:"flex", gap:0, marginBottom:8, border:"1px solid #bbb" }}>
+        {/* Left KPI - fixed 300px */}
+        <div style={{ width:300, flexShrink:0, background:"#fff", borderRight:"2px solid #bbb" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tbody>
+              <tr style={{ background:"#e8e8e8" }}>
+                <td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"3px 6px", letterSpacing:"0.08em" }}>Artist and Outcome</td>
+              </tr>
+              {[
+                ["Gross Revenue",    $(totalGross),      400, "#111",   BG.even],
+                ["Investor Return",  $(invReturn),       700, T.blue,   BG.odd],
+                ["  % of Revenue",   pv(totalGross>0?invReturn/totalGross:0), 400,"#888",BG.even],
+                ["  Return/Gross",   res.investorPrincipal>0?dp(invReturn/res.investorPrincipal):"—", 400,"#888",BG.odd],
+                ["Investor ROI",     pv(invROI),         700, invROI>=0?"#2e7d32":"#c62828", BG.even],
+                ["Artist Income",    $(res.totalArtistIncome), 700,"#111",BG.odd],
+                ["  % of Revenue",   pv(totalGross>0?res.totalArtistIncome/totalGross:0),400,"#888",BG.even],
+                ["  Fee:",           $(artistFee),       400,"#666",    BG.odd],
+                ["  Backend:",       $(artBack),         400,"#666",    BG.even],
+                ["Label Income",     $(labRoyTotal),     700,"#111",    BG.odd],
+                ["  % of Revenue",   pv(totalGross>0?labRoyTotal/totalGross:0),400,"#888",BG.even],
+                ["TRM Return",       $(res.totalTRMReturn),700,T.gold,  BG.odd],
+                ["  % of Revenue",   pv(totalGross>0?res.totalTRMReturn/totalGross:0),400,"#888",BG.even],
+              ].map(([l,v,fw,c,bg])=>(
+                <tr key={l} style={{ height:RH, background:bg, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:fw, color:"#444" }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:fw, color:c }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Right: Revenue to Investors */}
+        <div style={{ flex:1, background:"#fff", minWidth:0 }}>
+          <div style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", padding:"3px 8px", background:"#e8e8e8", borderBottom:"1px solid #bbb" }}>Revenue to Investors</div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tbody>
+              {[
+                ["THEATRICAL",      ntis.theat,  CH[0]],
+                ["STREAMING",       ntis.stream, CH[1]],
+                ["ALBUM DIGITAL",   ntis.dig,    CH[2]],
+                ["ALBUM WHOLESALE", ntis.whl,    CH[3]],
+                ["ALBUM D2C",       ntis.d2c,    CH[4]],
+                ["MERCH",           ntis.merch,  CH[5]],
+              ].map(([label,v,ch])=>(
+                <tr key={label} style={{ height:RH, background:ch.bg, borderBottom:`1px solid ${ch.bd}` }}>
+                  <td style={{ ...cbl, fontWeight:700, fontSize:11, letterSpacing:"0.07em", width:"50%" }}>{label}</td>
+                  <td style={{ ...cbr, fontWeight:700 }}>{$(v)}</td>
+                </tr>
+              ))}
+              <tr style={{ height:RH, background:"#e8e8e8", borderTop:"1px solid #bbb" }}>
+                <td style={{ ...cbl, fontWeight:700 }}>TOTAL NTI</td>
+                <td style={{ ...cbr, fontWeight:700 }}>{$(nti)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════
+          MAIN TABLE: 6 channel cols — revenue waterfall only
+         ══════════════════════════════════════════════════════════════ */}
+      <div style={{ border:"1px solid #bbb", marginBottom:8, overflowX:"auto" }}>
+        <table style={{ borderCollapse:"collapse", tableLayout:"fixed", minWidth:732, width:"100%" }}>
+          <colgroup>
+            <col style={{ width:122 }}/> {/* theatrical */}
+            <col style={{ width:122 }}/> {/* streaming */}
+            <col style={{ width:122 }}/> {/* digital */}
+            <col style={{ width:122 }}/> {/* wholesale */}
+            <col style={{ width:122 }}/> {/* d2c */}
+            <col style={{ width:122 }}/> {/* merch */}
+          </colgroup>
+          <thead>
+            <tr>
+              {["THEATRICAL","STREAMING","ALBUM: DIGITAL","ALBUM: WHOLESALE","ALBUM: PHYS D2C","MERCH"].map((l,i)=>(
+                <td key={l} style={chHdr(i,l)}>{l}</td>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* ── REVENUE ─────────────────────────────────────────── */}
+            {(() => {
+              const secHdr6 = (label) => (
+                <tr style={{ background:BG.sec }}>
+                  <td colSpan={6} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.1em", padding:"2px 5px", borderTop:"1px solid #aaa", borderBottom:"1px solid #aaa" }}>{label}</td>
+                </tr>
+              );
+              const mkRow6 = (cells, bg=BG.even) => (
+                <tr style={{ height:RH, background:bg, borderBottom:"1px solid #ebebeb" }}>{cells}</tr>
+              );
+              return (<>
+                {secHdr6("Revenue")}
+                {/* Gross revenue row */}
+                {mkRow6([ch($(gbo),{fontWeight:700}),ch($(streamSale),{fontWeight:700}),ch(nv(streams)),ch(nv(wV)),ch(nv(dV)),ch(nv(s.merchUnits||0))],BG.hl1)}
+                {mkRow6([ch("Gross Box Office",{fontSize:10,color:"#888"}),ch("Streaming Sale",{fontSize:10,color:"#888"}),ch("Number of Streams",{fontSize:10,color:"#888"}),ch("Vinyl Units Sold",{fontSize:10,color:"#888"}),ch("Vinyl Units Sold",{fontSize:10,color:"#888"}),ch("Merch Units Sold",{fontSize:10,color:"#888"})],BG.hl1)}
+                {mkRow6([ch($(exhibTake),{...dim,...red}),ch(""),ch("$"+r.revenuePerStream,{fontSize:11}),ch($(vinylWhl)),ch($(vinylD2C)),ch($(grossMerch),{fontWeight:700})],BG.hl1)}
+                {mkRow6([ch("Exhibitor Take (50%)",{fontSize:10,color:"#888"}),ch(""),ch("Revenue per Stream",{fontSize:10,color:"#888"}),ch("Vinyl Wholesale Revenue",{fontSize:10,color:"#888"}),ch("Vinyl D2C Revenue",{fontSize:10,color:"#888"}),ch("Gross Merch Revenue",{fontSize:10,color:"#888"})],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch($(grossDig),{fontWeight:700}),ch(nv(wC)),ch(nv(dC)),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch("Gross Streaming Revenue",{fontSize:10,color:"#888"}),ch("CD Units Sold",{fontSize:10,color:"#888"}),ch("CD Units Sold",{fontSize:10,color:"#888"}),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch($(cdWhl)),ch($(cdD2C)),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch("CD Wholesale Revenue",{fontSize:10,color:"#888"}),ch("CD D2C Revenue",{fontSize:10,color:"#888"}),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch(nv(wK)),ch(nv(dK)),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch("Cassette Units Sold",{fontSize:10,color:"#888"}),ch("Cassette Units Sold",{fontSize:10,color:"#888"}),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch($(cassWhl)),ch($(cassD2C)),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch("Cassette Wholesale Rev",{fontSize:10,color:"#888"}),ch("Cassette D2C Rev",{fontSize:10,color:"#888"}),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch($(grossWhl),{fontWeight:700}),ch($(grossD2C),{fontWeight:700}),ch("")],BG.hl1)}
+                {mkRow6([ch(""),ch(""),ch(""),ch("Gross Wholesale Revenue",{fontSize:10,color:"#888"}),ch("Gross D2C Revenue",{fontSize:10,color:"#888"}),ch("")],BG.hl1)}
+
+                {/* Partner sub-header */}
+                <tr style={{ background:BG.hl3 }}>
+                  {["Trafalgar","The Orchard","Label / Orchard","Label / Orchard","Label / Mfctr","Mainfactor"].map((l,i)=>(
+                    <td key={i} style={{ ...cbl, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", padding:"1px 4px", borderBottom:"1px solid #bbb", background:CH[i].bg }}>{l}</td>
+                  ))}
+                </tr>
+                {/* Deduction lines: theatrical, streaming(blank), dig(labRoy+orchFee), whl(labRoy+orchFee), d2c(labRoy+mfctr), merch(mfctr) */}
+                {mkRow6([chL("Dist Costs: "+$(s.theatDistCost),{...dim,...red}),ch(""),chL("Lab Roy: "+$(labRoyDig),{...dim,...red}),chL("Lab Roy: "+$(labRoyWhl),{...dim,...red}),chL("Lab Roy: "+$(labRoyD2C),{...dim,...red}),chL("Mfctr: "+$(mfMerch),{...dim,...red})])}
+                {mkRow6([chL("P&A: "+$(s.pa??s.theatDistCost),{...dim,...red}),ch(""),chL("Orch Dist: "+$(orchFeeDig),{...dim,...red}),chL("Orch Dist: "+$(orchFeeWhl),{...dim,...red}),chL("Mfctr Fee: "+$(mfD2C),{...dim,...red}),ch("")],BG.odd)}
+                {mkRow6([chL("Net Profit: "+$(netProfit),{fontWeight:700,fontSize:11,color:"#1a4a7a"}),ch(""),chL("Orch Mktg DD: "+$(orchDDDig),{...dim,...red}),chL("Orch Mktg DD: "+$(orchDDWhl),{...dim,...red}),ch(""),ch("")],BG.odd)}
+                {mkRow6([chL("Distrib (50%): "+$(distShare),{fontSize:11,color:"#1a4a7a"}),ch(""),ch(""),ch(""),ch(""),ch("")])}
+
+                {/* NET TO CAMA */}
+                <tr style={{ background:"#d4d4d4", borderTop:"1px solid #999", borderBottom:"1px solid #999" }}>
+                  {["THEATRICAL","STREAMING","ALBUM DIGITAL","ALBUM WHOLESALE","ALBUM D2C","MERCH"].map((l,i)=>(
+                    <td key={i} style={{ ...cbr, fontWeight:700, background:CH[i].bg, fontSize:11, textTransform:"uppercase", letterSpacing:"0.06em", borderLeft:`1px solid ${CH[i].bd}` }}>Net to CAMA</td>
+                  ))}
+                </tr>
+                <tr style={{ height:RH, background:BG.ntc, borderBottom:"1px solid #ebebeb" }}>
+                  {[ntcTheat, ntcStream, ntcDig, ntcWhl, ntcD2C, ntcMerch].map((v,i)=>(
+                    <td key={i} style={{ ...cbr, fontWeight:700 }}>{$(v)}</td>
+                  ))}
+                </tr>
+
+                {/* ── CAMA / SALES AGENT / GLASSHAUS / COGS / POST-GH MKTG / NTI ── */}
+                <tr style={{ borderTop:"3px solid #888" }}>
+                  {["THEATRICAL","STREAMING","ALBUM DIGITAL","ALBUM WHOLESALE","ALBUM D2C","MERCH"].map((l,i)=>(
+                    <td key={l} style={chHdr(i,l)}>{l}</td>
+                  ))}
+                </tr>
+                {/* NTC basis repeat */}
+                <tr style={{ height:RH, background:"#f5f5f5", borderBottom:"1px solid #ebebeb" }}>
+                  {[ntcTheat, ntcStream, ntcDig, ntcWhl, ntcD2C, ntcMerch].map((v,i)=>(
+                    <td key={i} style={{ ...cbr, fontWeight:700 }}>{$(v)}</td>
+                  ))}
+                </tr>
+                <tr style={{ height:RH, background:"#f5f5f5", borderBottom:"1px solid #ebebeb" }}>
+                  {[0,1,2,3,4,5].map(i=><td key={i} style={{ ...cbl, fontSize:10, color:"#888" }}>Net to CAMA</td>)}
+                </tr>
+
+                {/* CAMA fee — proportional to positive NTC */}
+                {(()=>{
+                  const ntcArr = [ntcTheat, ntcStream, ntcDig, ntcWhl, ntcD2C, ntcMerch];
+                  return (<>
+                    {mkRow6(ntcArr.map((v,i)=>ch($(-(res._camaC?.[i]||0)),{color:"#b00",fontSize:11})),BG.odd)}
+                    {mkRow6([0,1,2,3,4,5].map(i=><td key={i} style={{ ...cbl, fontSize:10, color:"#b00" }}>CAMA Fee</td>),BG.odd)}
+                  </>);
+                })()}
+
+                {/* Sales agent — streaming only */}
+                <tr style={{ background:BG.hl3, borderTop:"1px solid #bbb" }}>
+                  <td style={{ ...cbl, fontSize:11, background:CH[0].bg }}/>
+                  <td style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", background:CH[1].bg }}>Sales Agent</td>
+                  {[2,3,4,5].map(i=><td key={i} style={{ ...cbl, background:CH[i]?.bg||"" }}/>)}
+                </tr>
+                {mkRow6([ch(""),ch($(-saFee),{color:"#b00"}),ch(""),ch(""),ch(""),ch("")])}
+                {mkRow6([ch(""),ch($(-saExp),{color:"#b00"}),ch(""),ch(""),ch(""),ch("")],BG.odd)}
+                {mkRow6([ch(""),ch("Sales Agent Fee + Exp",{fontSize:10,color:"#888"}),ch(""),ch(""),ch(""),ch("")])}
+
+                {/* Glasshaus — proportional via 5% reference ratio */}
+                <tr style={{ background:BG.hl3, borderTop:"1px solid #bbb" }}>
+                  {CH.map((c,i)=><td key={i} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"1px 4px", background:c.bg }}>Glasshaus</td>)}
+                </tr>
+                {mkRow6((res._ghC||[0,0,0,0,0,0]).map((v,i)=>ch($(-v),{color:"#b00",fontSize:11})))}
+                {mkRow6([0,1,2,3,4,5].map(i=><td key={i} style={{ ...cbl, fontSize:10, color:"#b00" }}>Glasshaus Fee</td>))}
+
+                {/* COGs — album excess split whl/d2c; merch surplus flows positive */}
+                <tr style={{ background:BG.hl3, borderTop:"1px solid #bbb" }}>
+                  {CH.map((c,i)=><td key={i} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"1px 4px", background:c.bg }}>
+                    {i>=3?"COGS":""}
+                  </td>)}
+                </tr>
+                {mkRow6([ch(""),ch(""),ch(""),
+                  ch(albumCOGPerCh>0?$(-albumCOGPerCh):"—",{color:albumCOGPerCh>0?"#b00":"#888",fontSize:11}),
+                  ch(albumCOGPerCh>0?$(-albumCOGPerCh):"—",{color:albumCOGPerCh>0?"#b00":"#888",fontSize:11}),
+                  ch(merchCOGDeducted>0?$(-merchCOGDeducted):merchCOGSurplus>0?$(+merchCOGSurplus):"—",
+                    {color:merchCOGDeducted>0?"#b00":merchCOGSurplus>0?"#1a7a1a":"#888",fontSize:11})
+                ],BG.odd)}
+                {mkRow6([ch(""),ch(""),ch(""),
+                  ch("Wholesale Album COGS",{fontSize:10,color:"#888"}),
+                  ch("D2C Album COGS",{fontSize:10,color:"#888"}),
+                  ch(merchCOGDeducted>0?"Merchandise COGS":merchCOGSurplus>0?"Merch Surplus":"Merchandise COGS",{fontSize:10,color:"#888"})
+                ],BG.odd)}
+
+                {/* Post-GH Marketing */}
+                <tr style={{ background:BG.hl3, borderTop:"1px solid #bbb" }}>
+                  {CH.map((c,i)=><td key={i} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"1px 4px", background:c.bg, color:postGhMktgPerCh>0?"#b00":"#aaa" }}>
+                    {i>0?"MKTG":""}
+                  </td>)}
+                </tr>
+                {mkRow6([ch("—",{color:"#ccc"}), ch("—",{color:"#ccc"}),
+                  ch(postGhMktgPerCh>0?$(-postGhMktgPerCh):"—",{color:postGhMktgPerCh>0?"#b00":"#ccc",fontSize:11}),
+                  ch(postGhMktgPerCh>0?$(-postGhMktgPerCh):"—",{color:postGhMktgPerCh>0?"#b00":"#ccc",fontSize:11}),
+                  ch(postGhMktgPerCh>0?$(-postGhMktgPerCh):"—",{color:postGhMktgPerCh>0?"#b00":"#ccc",fontSize:11}),
+                  ch(postGhMktgPerCh>0?$(-postGhMktgPerCh):"—",{color:postGhMktgPerCh>0?"#b00":"#ccc",fontSize:11}),
+                ])}
+                {mkRow6([ch(""),
+                  ch(""),
+                  ch(postGhMktgPerCh>0?"Digital Album Marketing":"(none needed)",{fontSize:10,color:"#888"}),
+                  ch(postGhMktgPerCh>0?"Wholesale Album Marketing":"(none needed)",{fontSize:10,color:"#888"}),
+                  ch(postGhMktgPerCh>0?"D2C Album Marketing":"(none needed)",{fontSize:10,color:"#888"}),
+                  ch(postGhMktgPerCh>0?"Merchandise Marketing":"(none needed)",{fontSize:10,color:"#888"}),
+                ],BG.odd)}
+
+                {/* NET TO INVESTORS */}
+                <tr style={{ height:RH, background:"#e2efda", borderTop:"2px solid #6aaa50", borderBottom:"2px solid #6aaa50" }}>
+                  {[ntis.theat,ntis.stream,ntis.dig,ntis.whl,ntis.d2c,ntis.merch].map((v,i)=>(
+                    <td key={i} style={{ ...cbr, fontWeight:700 }}>{$(v)}</td>
+                  ))}
+                </tr>
+                <tr style={{ height:RH, background:"#e2efda" }}>
+                  {[0,1,2,3,4,5].map(i=><td key={i} style={{ ...cbl, fontWeight:700, fontSize:10 }}>NET TO INVESTORS</td>)}
+                </tr>
+              </>);
+            })()}
+          </tbody>
+        </table>
+      </div>
+
+
+      {/* ══ BOTTOM 3-COL: CAMA Part 2 | Revenue Totals | Fee/COG/CPA ══ */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+
+        {/* CAMA Part 2 */}
+        <div style={{ border:"1px solid #bbb", background:"#fff", overflow:"hidden" }}>
+          <div style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"3px 6px", background:BG.sec, letterSpacing:"0.1em", borderBottom:"1px solid #bbb" }}>CAMA Part 2 — Investor Recoup</div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tbody>
+              {[
+                ["Total to Investors",    $(nti),              700, "#111",  BG.odd],
+                ["TRM LLC Deferred Fee",  $(trmDef),           400, "#444",  BG.even],
+                ["TRM LLC Premium",       $(r.trmPremium),     400, "#444",  BG.odd],
+                ["Investor Principal",    $(res.investorPrincipal),700,T.blue,BG.even],
+                ["Investor Premium (Owed)",$(res.investorPremium),400,"#444",BG.odd],
+                ["Investor Prem (Recouped)",$(res.investorPremium),400,"#444",BG.even],
+                ["Net Proceeds",          $(netProc),          700, "#2e7d32",BG.odd],
+                ["Value of a Single Point",$(netProc/100),     400, "#444",  BG.even],
+              ].map(([l,v,fw,c,bg])=>(
+                <tr key={l} style={{ height:RH, background:bg, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:fw }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:fw, color:c }}>{v}</td>
+                </tr>
+              ))}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Backend Pool</td></tr>
+              {[
+                ["Investor Pool (50%)", $(res.investorBackend), "50"],
+                ["Artist Share",         $(artBack),            r.backendArtist+"pts"],
+                ["TRM LLC",              $(trmBack),            trmPts+"pts"],
+                ["Legal",                $(legalBack),          "1pt"],
+                ["Talent Booker",        $(talentBack),         "1.25pts"],
+              ].map(([l,v,pts],i)=>(
+                <tr key={l} style={{ height:RH, background:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={cbl}>{l}</td>
+                  <td style={{ ...cbr, color:"#555" }}>{v} <span style={{ fontSize:11, color:"#aaa" }}>({pts})</span></td>
+                </tr>
+              ))}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Summary</td></tr>
+              {[
+                ["Total Investor Return",   $(invReturn),              700],
+                ["  Principal",             $(res.investorPrincipal),  400],
+                ["  Premium",               $(res.investorPremium),    400],
+                ["  Backend",               $(res.investorBackend),    400],
+                ["ROI",                     pv(invROI),                700],
+                ["Total Artist Income",     $(res.totalArtistIncome),  700],
+                ["  Fee",                   $(artistFee),              400],
+                ["  Backend",               $(artBack),                400],
+                ["Total TRM Return",        $(res.totalTRMReturn),     700],
+                ["  Deferred Fee",          $(trmDef),                 400],
+                ["  Premium",               $(r.trmPremium),           400],
+                ["  Backend",               $(trmBack),                400],
+              ].map(([l,v,fw],i)=>(
+                <tr key={l} style={{ height:RH, background:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:fw, color:fw===700?"#111":"#555" }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:fw }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Revenue Totals */}
+        <div style={{ border:"1px solid #bbb", background:"#fff", overflow:"hidden", alignSelf:"start" }}>
+          <div style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"3px 6px", background:BG.sec, letterSpacing:"0.1em", borderBottom:"1px solid #bbb" }}>Revenue Totals</div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tbody>
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Grosses</td></tr>
+              {[["Gross Theatrical",$(gbo)],["Gross Streaming",$(streamSale)],["Gross Album Digital",$(grossDig)],["Gross Album Physical",$(grossWhl+grossD2C)],["Gross Merch",$(grossMerch)],["TOTAL GROSS REVENUE",$(totalGross)]].map(([l,v],i)=>(
+                <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400 }}>{v}</td>
+                </tr>
+              ))}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Net to CAMA (NTC)</td></tr>
+              {[["NTC Theatrical",$(ntcTheat)],["NTC Streaming",$(streamSale)],["NTC Album Digital",$(Math.max(0,ntcDig))],["NTC Album Physical",$(Math.max(0,ntcWhl)+Math.max(0,ntcD2C))],["NTC Merch",$(Math.max(0,ntcMerch))],["TOTAL NTC REVENUE",$(totalNTC)],["NTC/GROSS",pv(ntcToGross)]].map(([l,v],i)=>(
+                <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400 }}>{v}</td>
+                </tr>
+              ))}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Net to Investors (NTI)</td></tr>
+              {[["NTI Theatrical",$(ntis.theat)],["NTI Streaming",$(ntis.stream)],["NTI Album Digital",$(ntis.dig)],["NTI Album Physical",$(ntis.whl+ntis.d2c)],["NTI Merch",$(ntis.merch)],["TOTAL NTI REVENUE",$(nti)],["NTC→NTI Loss",$(nti-totalNTC)],["NTC/NTC",pv(ntiToNTC)],["NTC/GROSS",pv(ntiToGross)]].map(([l,v],i)=>(
+                <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400, color:l.includes("Loss")&&(nti-totalNTC)<0?"#b00":undefined }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Fee / COG / CPA */}
+        <div style={{ border:"1px solid #bbb", background:"#fff", overflow:"hidden", alignSelf:"start" }}>
+          <div style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"3px 6px", background:BG.sec, letterSpacing:"0.1em", borderBottom:"1px solid #bbb" }}>Fee / COG / CPA Totals</div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tbody>
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Fees</td></tr>
+              {(()=>{
+                const allFees = exhibTake + distShare + s.theatDistCost + (orchFeeDig+orchFeeWhl) + (mfD2C+mfMerch) + ghFee + labRoyTotal + camaFee + (saFee+saExp);
+                return [
+                  ["Exhibitor Revenue Share",$(exhibTake)],
+                  ["Trafalgar Revenue Share",$(distShare)],
+                  ["Trafalgar Dist Costs",$(s.theatDistCost)],
+                  ["Orchard Dist Fees",$(orchFeeDig+orchFeeWhl)],
+                  ["Mainfactor Mgmt Fees",$(mfD2C+mfMerch)],
+                  ["Glasshaus Dist Fees",$(ghFee)],
+                  ["Label Royalties",$(labRoyTotal)],
+                  ["CAMA Fees",$(camaFee)],
+                  ["Sales Fees",$(saFee+saExp)],
+                  ["TOTAL FEES",$(allFees)],
+                ].map(([l,v],i)=>(
+                  <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                    <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                    <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400, color:"#b00" }}>{v}</td>
+                  </tr>
+                ));
+              })()}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>COGs</td></tr>
+              {[["Album COGs",$(albumMfgTotal)],["Merch COGs",$(merchMfgTotal)],["Film COGs (ex fee)",$(prodBudget-artistFee)],["TOTAL COGS",$(res.totalCOGs)],["TOTAL COGS (ex budget)",$(Math.max(0,albumMfgTotal-budgAlbumMfg)+Math.max(0,merchMfgTotal-budgMerchMfg))]].map(([l,v],i)=>(
+                <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400, color:T.orange }}>{v}</td>
+                </tr>
+              ))}
+              <tr style={{ background:BG.hl3 }}><td colSpan={2} style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"2px 5px" }}>Marketing / CPAs</td></tr>
+              {[["Theatrical Marketing",$(s.pa??s.theatDistCost)],["Orchard Mktg DD (Dig)",$(orchDDDig)],["Orchard Mktg DD (Whl)",$(orchDDWhl)],["Production Mktg Budget",$(budgMktg)],[`Needed (÷${r.targetROAS||5} ROAS)`,$(neededMktg)],["Post-GH Mktg (4 ch)",$(postGhMktgRemainder)],["TOTAL COMMITTED",$(totalMktg)]].map(([l,v],i)=>(
+                <tr key={l} style={{ height:RH, background:l.startsWith("TOTAL")?BG.hl2:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #eee" }}>
+                  <td style={{ ...cbl, fontWeight:l.startsWith("TOTAL")?700:400 }}>{l}</td>
+                  <td style={{ ...cbr, fontWeight:l.startsWith("TOTAL")?700:400 }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ padding:"3px 8px", background:"#f2f2f2", border:"1px solid #ccc", fontSize:11, color:"#aaa", letterSpacing:"0.07em" }}>
+      {/* ══ ASSUMPTIONS PANEL ══ */}
+      <div style={{ border:"1px solid #bbb", marginBottom:8, background:"#fff", overflow:"hidden" }}>
+        <div style={{ ...cbl, fontWeight:700, fontSize:11, textTransform:"uppercase", padding:"4px 8px", background:BG.sec, letterSpacing:"0.1em", borderBottom:"1px solid #bbb" }}>Assumptions</div>
+        {/* Each sub-array is one column */}
+        <div style={{ display:"flex", alignItems:"flex-start", borderTop:"1px solid #ddd" }}>
+          {[
+            {
+              title:"PHYSICAL ALBUM",
+              rows:[
+                ["Total Vinyl Units", nv(totalVinyl)],
+                ["Vinyl MSRP", "$"+r.vinylMSRP],
+                ["Vinyl COG", "$"+r.vinylCOG],
+                ["Total CD Units", nv(totalCD)],
+                ["CD MSRP", "$"+r.cdMSRP],
+                ["CD COG", "$"+r.cdCOG],
+                ["Total Cassette Units", nv(totalCassette)],
+                ["Cassette MSRP", "$"+r.cassetteMSRP],
+                ["Cassette COG", "$"+r.cassetteCOG],
+                ["Total Mfg Cost", $(albumMfgTotal)],
+                ["Budgeted Album Mfg", $(budgAlbumMfg)],
+                ["Suppl. by Mainfactor", "$0"],
+                ["Remainder", $(Math.max(0,albumMfgTotal-budgAlbumMfg))],
+              ]
+            },
+            {
+              title:"WHOLESALE",
+              rows:[
+                ["Wholesale Share", pv(r.wholesaleShare)],
+                ["Wholesale Discount", pv(r.wholesaleDiscount)],
+                ["Wholesale/Streaming Ratio", dp(wsRatio)],
+              ],
+              extra:{
+                title:"THEATRICAL",
+                rows:[
+                  ["GBO", $(gbo)],
+                  ["Exhibitor Take", pv(r.exhibitorTake)],
+                  ["Distributor Take", pv(r.distributorTake)],
+                  ["Theatrical Dist Costs", $(s.theatDistCost)],
+                  ["Trafalgar P&A", $(s.pa??s.theatDistCost)],
+                  ["Net Profit", $(netProfit)],
+                  ["Distributor Share (50%)", $(distShare)],
+                ]
+              }
+            },
+            {
+              title:"STREAMING SALE",
+              rows:[
+                ["Sale Price", $(streamSale)],
+              ],
+              extra:{
+                title:"ALBUM: DIGITAL",
+                rows:[
+                  ["Number of Streams", nv(streams)],
+                  ["Revenue Per Stream", "$"+r.revenuePerStream],
+                  ["Gross Streaming Revenue", $(grossDig)],
+                ]
+              }
+            },
+            {
+              title:"MERCHANDISE",
+              rows:[
+                ["Number of Units", nv(s.merchUnits||0)],
+                ["Average Sale Price", "$"+r.merchASP],
+                ["Average COG", "$"+r.merchCOG],
+                ["Total Mfg Cost", $(merchMfgTotal)],
+                ["Budgeted Merch Mfg", $(budgMerchMfg)],
+                ["Merch Mfg COG Deduction", $(merchCOGDeducted)],
+                ["Mfg Overrun Flag", budgMerchMfg > merchMfgTotal ? $(budgMerchMfg - merchMfgTotal)+" over budget" : "—"],
+              ]
+            },
+            {
+              title:"FEES",
+              rows:[
+                ["Mainfactor Fee", pv(r.mainfactorFee)],
+                ["GH Fee Tier 1 (5%)", "5% ≤ $4M"],
+                ["GH Fee Tier 2 (3%)", "3% $4–6M"],
+                ["GH Fee Tier 3 (1%)", "1% >$6M"],
+                ["Orchard Fee (15%)", pv(r.orchardFee)],
+                ["Sales Agent Fee (10%)", pv(r.salesAgentFee)],
+                ["Sales Agent Expenses", $(r.salesAgentExpenses)],
+                ["CAMA Tier 1 (.9%)", ".9% ≤ $1.5M"],
+                ["CAMA Tier 2 (.7%)", ".7% $1.5–3M"],
+                ["CAMA Tier 3 (.5%)", ".5% >$3M"],
+                ["Label Royalty (12%)", pv(r.labelRoyalty)],
+              ]
+            },
+            {
+              title:"MARKETING · PHYS + MERCH",
+              rows:[
+                ["Total Units Proj D2C", nv(dV+dC+dK+(s.merchUnits||0))],
+                ["Target ROAS", `${r.targetROAS||5}×`],
+                ["Total Marketing Cost", $(neededMktg)],
+                ["Budget Marketing", $(budgMktg)],
+                ["Orchard Drawdown", $(orchD)],
+                ["Mainfactor Drawdown", "$0"],
+                ["Gross Sales (base)", $(mktgGrossBase)],
+                ["Overrun Flag", orchardOverage>0?$(orchardOverage)+" over":"—"],
+              ],
+              extra:{
+                title:"BUDGET",
+                rows:[
+                  ["Above the Line", $(sc(r.budgetATL))],
+                  ["Artist Fee", $(artistFee)],
+                  ["Below the Line", $(sc(r.budgetBTL))],
+                  ["Post Production", $(sc(r.budgetPost))],
+                  ["Design", $(sc(r.budgetDesign))],
+                  ["Merch Manufacturing", $(sc(r.budgetMerchMfg))],
+                  ["Album Manufacturing", $(sc(r.budgetAlbumMfg))],
+                  ["Marketing", $(sc(r.budgetMarketing))],
+                  ["Management Expenses", $(sc(r.budgetMgmtExpenses))],
+                  ["Production Budget", $(prodBudget)],
+                  ["TRM Deferral", $(trmDef)],
+                  ["Total Incl. Deferral", $(prodBudget+trmDef)],
+                ]
+              }
+            },
+            {
+              title:"BACKEND",
+              rows:[
+                ["Creative Pool", "50pts"],
+                ["Artist", r.backendArtist+"pts"],
+                ["Label", "0pts"],
+                ["TRM LLC", trmPts+"pts"],
+                ["Legal", "1pt"],
+                ["Talent Booker", "1.25pts"],
+              ]
+            },
+          ].map((col,ci)=>(
+            <div key={ci} style={{ flex:1, borderRight:"1px solid #ddd", minWidth:0 }}>
+              {/* Main section */}
+              <div style={{ ...cbl, fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", padding:"2px 6px", background:BG.hl3, borderBottom:"1px solid #ddd" }}>{col.title}</div>
+              {col.rows.map(([l,v],i)=>(
+                <div key={l+i} style={{ display:"flex", justifyContent:"space-between", padding:"2px 6px", background:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #ebebeb", fontSize:11, fontFamily:F }}>
+                  <span style={{ color:"#555" }}>{l}</span>
+                  <span style={{ fontWeight:500, color: (l==="Overrun Flag"||l==="Mfg Overrun Flag")&&v!=="—"?"#b00":undefined }}>{v}</span>
+                </div>
+              ))}
+              {/* Extra sub-section stacked below in same column */}
+              {col.extra&&(<>
+                <div style={{ ...cbl, fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", padding:"2px 6px", background:BG.hl3, borderBottom:"1px solid #ddd", borderTop:"2px solid #bbb" }}>{col.extra.title}</div>
+                {col.extra.rows.map(([l,v],i)=>(
+                  <div key={l+i} style={{ display:"flex", justifyContent:"space-between", padding:"2px 6px", background:i%2===0?BG.even:BG.odd, borderBottom:"1px solid #ebebeb", fontSize:11, fontFamily:F }}>
+                    <span style={{ color:"#555" }}>{l}</span>
+                    <span style={{ fontWeight:500 }}>{v}</span>
+                  </div>
+                ))}
+              </>)}
+            </div>
+          ))}
+        </div>
+      </div>
+
+        Backend View · Live from selected scenario · All math identical to Model tab · Read-only reference
+      </div>
+    </div>
+  );
+}
+// ── Main App ──────────────────────────────────────────────────────
+const TABS=[["model","Model"],["compare","Compare"],["waterfall","Waterfall"],["scenarios","Scenarios"],["backend","Backend"]];
+const FONT_SIZES=[13,14,15,16,18];
+
+export default function TheRoundModel() {
+  const [scenarios,setScenarios]=useState(SEED);
+  const [selected,setSelected]=useState("LANA DEL REY — BASE");
+  const [tab,setTab]=useState("model");
+  const [compareSort,setCompareSort]=useState({col:null,dir:1}); // dir: 1=asc, -1=desc
+  const [rates,setRates]=useState({...DR});
+  const [royaltyTopLine,setRoyaltyTopLine]=useState(true); // true=deduct at top of waterfall; false=12% of artist backend only
+  // Working overrides for the current scenario — cleared on scenario switch unless saved
+  const [overrides,setOverrides]=useState({});          // revenue input overrides
+  const [budgetLineEdits,setBudgetLineEdits]=useState({}); // {rateKey: absoluteValue}
+  const [workingBudgetPct,setWorkingBudgetPct]=useState(null); // null = use global
+  const [workingRateEdits,setWorkingRateEdits]=useState({});   // fee rate overrides
+  const [hasUnsaved,setHasUnsaved]=useState(false);
+  const [showBuilder,setShowBuilder]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(null);
+  const [editingCell,setEditingCell]=useState(null);
+  const [editVal,setEditVal]=useState("");
+  const [editingBudgetKey,setEditingBudgetKey]=useState(null);  // which budget line is open
+  const [editingBudgetVal,setEditingBudgetVal]=useState("");    // raw string while typing
+  const csvImportRef=useRef(null);
+  const [budgetPct,setBudgetPct]=useState(100);  // global default budget scale
+  const [fs,setFs]=useState(15);
+  const [ready,setReady]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      const STORAGE_VERSION="v8";
+      try{
+        const ver=await window.storage.get("tr-version").catch(()=>null);
+        if(ver?.value===STORAGE_VERSION){
+          try{const s=await window.storage.get("tr-sc");if(s?.value)setScenarios(JSON.parse(s.value));}catch{}
+          try{const r=await window.storage.get("tr-rt");if(r?.value)setRates({...DR,...JSON.parse(r.value)});}catch{}
+        } else {
+          try{await window.storage.delete("tr-sc");}catch{}
+          try{await window.storage.delete("tr-rt");}catch{}
+          await window.storage.set("tr-version",STORAGE_VERSION);
+        }
+      }catch{}
+      setReady(true);
+    })();
+  },[]);
+  useEffect(()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-sc",JSON.stringify(scenarios));}catch{}})();},[scenarios,ready]);
+  useEffect(()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-rt",JSON.stringify(rates));}catch{}})();},[rates,ready]);
+
+  // When switching scenario, load any saved per-scenario overrides from the scenario object
+  useEffect(()=>{
+    const scn=scenarios[selected]||{};
+    setOverrides({});
+    setBudgetLineEdits(scn._budgetLineEdits||{});
+    setWorkingBudgetPct(scn._budgetPct??null);
+    setWorkingRateEdits(scn._rateEdits||{});
+    setHasUnsaved(false);
+  },[selected]);
+
+  // Mark unsaved whenever working state changes (after initial load)
+  const markDirty=()=>setHasUnsaved(true);
+
+  const scenarioData=useMemo(()=>({...scenarios[selected],...overrides}),[selected,scenarios,overrides]);
+
+  // Effective rates = global rates + per-scenario rate edits + budget line absolute overrides
+  // Falls back to scenario's saved _budgetLineEdits and _rateEdits when working state is clean
+  const effectiveRates=useMemo(()=>{
+    const scn=scenarios[selected]||{};
+    const rateBase={...rates,...(scn._rateEdits||{}),...workingRateEdits};
+    const lineBase={...(scn._budgetLineEdits||{}),...budgetLineEdits};
+    Object.entries(lineBase).forEach(([k,v])=>{ rateBase[k]=v; });
+    rateBase.royaltyTopLine=royaltyTopLine;
+    return rateBase;
+  },[rates,workingRateEdits,budgetLineEdits,scenarios,selected,royaltyTopLine]);
+
+  const activeBudgetPct=workingBudgetPct??((scenarios[selected]||{})._budgetPct)??budgetPct;
+  const budgetPctForRun=Object.keys({...(scenarios[selected]||{})._budgetLineEdits,...budgetLineEdits}).length>0?100:activeBudgetPct;
+  const result=useMemo(()=>run(scenarioData,effectiveRates,budgetPctForRun/100),[scenarioData,effectiveRates,budgetPctForRun]);
+
+  // Save all current working state back into the scenario object
+  const saveToScenario=()=>{
+    // Derive effective budget pct from actual edited totals so it displays correctly after save
+    const editedTotal=Object.values(result.budgetLines).reduce((a,v)=>a+v,0);
+    const derivedPct=Math.round(editedTotal/TOTAL_STANDARD_BUDGET*100);
+    const savedBudgetPct=Object.keys(budgetLineEdits).length>0?derivedPct:(workingBudgetPct??budgetPct);
+    setScenarios(p=>({...p,[selected]:{
+      ...p[selected],
+      ...overrides,
+      _budgetLineEdits: Object.keys(budgetLineEdits).length>0?{...budgetLineEdits}:undefined,
+      _budgetPct: savedBudgetPct,
+      _rateEdits: Object.keys(workingRateEdits).length>0?{...workingRateEdits}:undefined,
+    }}));
+    setBudgetLineEdits({});
+    setOverrides({});
+    setHasUnsaved(false);
+  };
+
+  const discardChanges=()=>{
+    const scn=scenarios[selected]||{};
+    setOverrides({});
+    setBudgetLineEdits(scn._budgetLineEdits||{});
+    setWorkingBudgetPct(scn._budgetPct??null);
+    setWorkingRateEdits(scn._rateEdits||{});
+    setHasUnsaved(false);
+  };
+
+  const clearScenarioOverrides=(name)=>{
+    setScenarios(p=>({...p,[name]:{...p[name],_budgetLineEdits:undefined,_budgetPct:undefined,_rateEdits:undefined}}));
+    if(name===selected){setBudgetLineEdits({});setWorkingBudgetPct(null);setWorkingRateEdits({});setHasUnsaved(false);}
+  };
+
+  const upRate=(k,v)=>{setWorkingRateEdits(p=>({...p,[k]:v}));markDirty();};
+  const upOv=(k,v)=>{setOverrides(p=>({...p,[k]:v}));markDirty();};
+  const upBudgetLine=(k,v)=>{setBudgetLineEdits(p=>({...p,[k]:v}));markDirty();};
+  const clearBudgetLine=(k)=>{setBudgetLineEdits(p=>{const n={...p};delete n[k];return n;});markDirty();};
+  const saveBudgetLineEdit=(k,rawVal)=>{
+    const n=Number(String(rawVal).replace(/[^0-9.-]/g,""));
+    if(!isNaN(n)&&n>=0) upBudgetLine(k,n);
+    setEditingBudgetKey(null);
+    setEditingBudgetVal("");
+  };
+  const cancelBudgetLineEdit=()=>{setEditingBudgetKey(null);setEditingBudgetVal("");};
+  const upBudgetPct=(v)=>{setWorkingBudgetPct(v);markDirty();};
+
+  const saveScenario=(name,data)=>{
+    setScenarios(p=>({...p,[name]:data}));
+    setSelected(name);
+    setTab("model");
+  };
+  const saveScenarioDone=()=>setShowBuilder(false);
+  const duplicateScenario=(name)=>{let n=name+" COPY",i=2;while(scenarios[n]){n=name+" COPY "+i;i++;}setScenarios(p=>({...p,[n]:{...p[name]}}));};
+  const deleteScenario=(name)=>{if(confirmDelete===name){setScenarios(p=>{const n={...p};delete n[name];return n;});if(selected===name)setSelected(Object.keys(scenarios).find(k=>k!==name)||"");setConfirmDelete(null);}else{setConfirmDelete(name);setTimeout(()=>setConfirmDelete(null),3000);}};
+
+  // Per-scenario locked budget for scenarios table display
+  const getScenarioBudgetPct=(name)=>{const s=scenarios[name];return s?._budgetPct??budgetPct;};
+  const scenarioIsLocked=(name)=>{const s=scenarios[name]||{};return !!(s._budgetPct!==undefined||s._budgetLineEdits||s._rateEdits);};
+  const setScenarioBudgetPct=(name,pct)=>setScenarios(p=>({...p,[name]:{...p[name],_budgetPct:pct}}));
+  const clearScenarioBudget=(name)=>setScenarios(p=>({...p,[name]:{...p[name],_budgetPct:undefined}}));
+
+  const CSV_FIELDS=[
+    {k:"gbo",            h:"GBO"},
+    {k:"theatDistCost",  h:"Dist Cost"},
+    {k:"pa",             h:"P&A"},
+    {k:"streamingSale",  h:"Stream Sale"},
+    {k:"streams",        h:"Streams"},
+    {k:"vinyl",          h:"Vinyl"},
+    {k:"cd",             h:"CD"},
+    {k:"cassette",       h:"Cassette"},
+    {k:"orchardDrawdown",h:"Orch DD"},
+    {k:"merchUnits",     h:"Merch Units"},
+    {k:"artistFee",      h:"Artist Fee"},
+  ];
+
+  const exportScenariosCSV=()=>{
+    const headers=["Scenario",...CSV_FIELDS.map(f=>f.h)];
+    const rows=Object.entries(scenarios).map(([name,s])=>
+      [name,...CSV_FIELDS.map(f=>s[f.k]??0)]
+    );
+    const esc=v=>{const str=String(v==null?"":v);return str.includes(",")||str.includes('"')||str.includes("\n")?'"'+str.replace(/"/g,'""')+'"':str;};
+    const csv=[headers,...rows].map(row=>row.map(esc).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download="TheRound_Scenarios_"+new Date().toISOString().slice(0,10)+".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+
+  const importScenariosCSV=(file)=>{
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const parseRow=(line)=>{
+        const cols=[]; let cur="",inQ=false;
+        for(let i=0;i<line.length;i++){
+          const c=line[i];
+          if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+          else if(c===','&&!inQ){cols.push(cur);cur="";}
+          else cur+=c;
+        }
+        cols.push(cur);
+        return cols.map(s=>s.trim());
+      };
+      try {
+        const lines=e.target.result.split(/\r?\n/).filter(l=>l.trim());
+        if(lines.length<2){alert("CSV appears empty — need at least a header row and one data row.");return;}
+        const hdrs=parseRow(lines[0]);
+        const ci=(pattern)=>hdrs.findIndex(h=>pattern.test(h));
+        const COL={
+          scenario:        ci(/scenario/i),
+          gbo:             ci(/^gbo$/i),
+          theatDistCost:   ci(/dist.?cost/i),
+          pa:              ci(/^p&?a$/i),
+          streamingSale:   ci(/stream.?sale/i),
+          streams:         ci(/^streams$/i),
+          vinyl:           ci(/^vinyl$/i),
+          cd:              ci(/^cd$/i),
+          cassette:        ci(/^cassette$/i),
+          orchardDrawdown: ci(/orch.?dd|drawdown/i),
+          merchUnits:      ci(/merch.?(units)?$/i),
+          artistFee:       ci(/artist.?fee/i),
+        };
+        if(COL.scenario===-1){alert("No 'Scenario' column found — check your CSV header row.");return;}
+        const parsed={};
+        for(let i=1;i<lines.length;i++){
+          const cols=parseRow(lines[i]);
+          const name=(cols[COL.scenario]||"").trim();
+          if(!name) continue;
+          const scn={};
+          CSV_FIELDS.forEach(({k})=>{
+            const idx=COL[k];
+            if(idx!=null&&idx>=0&&cols[idx]!==undefined){
+              const v=Number(String(cols[idx]).replace(/[$,%\s]/g,""));
+              scn[k]=isNaN(v)?0:v;
+            }
+          });
+          parsed[name]=scn;
+        }
+        const count=Object.keys(parsed).length;
+        if(count===0){alert("No valid scenario rows found. Make sure your CSV has a Scenario column with names.");return;}
+        // Confirm then apply — move confirm here (outside FileReader callback) avoids async issues
+        const doImport=()=>{
+          setScenarios(parsed);
+          setSelected(Object.keys(parsed)[0]);
+          // Also persist directly to storage so it doesn't get overwritten by stale state
+          try{window.storage.set("tr-sc",JSON.stringify(parsed));}catch{}
+        };
+        if(window.confirm(`Import ${count} scenario${count>1?"s":""}? This replaces all current scenarios.`)){
+          doImport();
+        }
+      } catch(err){alert("Error parsing CSV: "+err.message);}
+    };
+    reader.readAsText(file);
+  };
+  const FIELDS=[
+    {k:"gbo",        l:"GBO",          fmt:fmtD},
+    {k:"theatDistCost",l:"Dist Cost",  fmt:fmtD},
+    {k:"pa",         l:"P&A",          fmt:v=>v!=null?fmtD(v):"—"},
+    {k:"streamingSale",l:"Stream Sale",fmt:fmtD},
+    {k:"streams",    l:"Streams",      fmt:fmtShort},
+    {k:"vinyl",      l:"Vinyl",        fmt:fmtShort},
+    {k:"cd",         l:"CD",           fmt:fmtShort},
+    {k:"cassette",   l:"Cass",         fmt:fmtShort},
+    {k:"orchardDrawdown",l:"Orch DD",  fmt:fmtD},
+    {k:"merchUnits", l:"Merch",        fmt:fmtShort},
+    {k:"artistFee",  l:"Artist Fee",   fmt:fmtD},
+  ];
+
+  const trafPA=overrides.pa??scenarioData.pa??scenarioData.theatDistCost??0;
+
+  const wfRows=[
+    ["Total NTC",result.totalNTC,T.gold],
+    ["– CAMA Fee",-result.camaFeeAmt,T.red],
+    ["– Glasshaus Fee",-result.glasshausFeeAmt,T.red],
+    ["– Sales Agent",-(result.salesAgentFeeAmt+rates.salesAgentExpenses),T.red],
+    ["– COGs",-result.totalCOGs,T.orange],
+    ["– Marketing (committed)",-result.totalMarketing,T.pink],
+    ["= Net to Investors",result.netToInvestors,T.gold],
+    ["– TRM Deferred",-result.trmDeferred,T.purple],
+    ["– TRM Premium",-result.trmPremiumAmt,T.purple],
+    ["– Investor Principal",-result.investorPrincipal,T.blue],
+    ["– Investor Premium",-result.investorPremium,T.blue],
+    ["= Backend Pool",result.netProceeds,T.green],
+    ["→ Investors (50%)",result.investorBackend,T.gold],
+    [`→ Artist (${rates.backendArtist}%)`,result.artistBackend,T.blue],
+    [`→ TRM (${result.trmBackendPts}%)`,result.trmBackend,T.purple],
+  ];
+
+  const card={background:T.bgCard,border:`1px solid ${T.border}`,borderRadius:7,padding:16};
+  const slab={fontSize:11,fontFamily:MN,letterSpacing:"0.13em",textTransform:"uppercase",color:T.gold,paddingBottom:8,borderBottom:`1px solid ${T.border}`,marginBottom:13};
+  const btn={border:"none",cursor:"pointer",fontFamily:MN,borderRadius:4};
+
+  return (
+    <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:SS,fontSize:fs}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px}
+        input[type=range]{-webkit-appearance:none;background:rgba(0,0,0,0.09);border-radius:2px;height:3px;outline:none}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:${T.gold};cursor:pointer;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.18)}
+        .hover-row:hover td{background:${T.bgSub}!important}
+        .scn-btn:hover{border-color:${T.goldBorder}!important;color:${T.gold}!important}
+      `}</style>
+
+      {/* Header */}
+      <div style={{padding:"10px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,background:T.bg,flexWrap:"wrap",gap:8,boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+          <span style={{fontFamily:SR,fontSize:22,color:T.gold,fontWeight:700}}>THE ROUND</span>
+          <span style={{fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.1em"}}>FINANCIAL MODEL</span>
+        </div>
+        <div style={{display:"flex",gap:4,background:T.bgDeep,borderRadius:5,padding:3,border:`1px solid ${T.border}`}}>
+          {TABS.map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{...btn,padding:"4px 12px",fontSize:12,background:tab===id?T.bg:"transparent",color:tab===id?T.gold:T.textDim,border:tab===id?`1px solid ${T.border}`:"1px solid transparent",boxShadow:tab===id?"0 1px 3px rgba(0,0,0,0.06)":"none"}}>{label}</button>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.08em"}}>SIZE</span>
+            {FONT_SIZES.map(size=>(
+              <button key={size} onClick={()=>setFs(size)} style={{...btn,width:22,height:22,padding:0,background:fs===size?T.goldBg:"transparent",color:fs===size?T.gold:T.textDim,border:`1px solid ${fs===size?T.goldBorder:T.border}`,fontSize:11,fontFamily:MN}}>{size}</button>
+            ))}
+          </div>
+          <button onClick={()=>setShowBuilder(true)} style={{...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}}>+ New Artist</button>
+        </div>
+      </div>
+
+      {/* Scenario strip */}
+      {tab!=="scenarios"&&(
+        <div style={{borderBottom:`1px solid ${T.border}`,background:T.bgSub}}>
+          <div style={{padding:"9px 20px",display:"flex",flexWrap:"wrap",gap:4,alignItems:"center"}}>
+            <span style={{fontFamily:MN,fontSize:11,color:T.textFaint,letterSpacing:"0.1em",marginRight:5}}>SCENARIO</span>
+            {Object.keys(scenarios).map(name=>{
+              const locked=scenarioIsLocked(name);
+              return (
+                <button key={name} className="scn-btn" onClick={()=>setSelected(name)} style={{...btn,padding:"4px 10px",fontSize:Math.max(9,fs-2),background:selected===name?T.goldBg:T.bg,color:selected===name?T.gold:T.textMid,border:`1px solid ${selected===name?T.goldBorder:T.border}`,display:"flex",alignItems:"center",gap:5}}>
+                  {name}
+                  {locked&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:8,background:T.gold,color:"#fff",fontFamily:MN,letterSpacing:"0.05em",fontWeight:700}}>SAVED</span>}
+                </button>
+              );
+            })}
+          </div>
+          {/* Save bar — only on model tab */}
+          {tab==="model"&&(
+            <div style={{padding:"7px 20px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:hasUnsaved?"rgba(138,104,0,0.04)":T.bgSub}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textFaint}}/>
+                  <span style={{fontFamily:MN,fontSize:11,color:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textDim}}>
+                    {hasUnsaved?"Unsaved changes":scenarioIsLocked(selected)?"Custom budget & fees saved to this scenario":"Using global rates & budget"}
+                  </span>
+                </div>
+                {scenarioIsLocked(selected)&&!hasUnsaved&&(
+                  <button onClick={()=>clearScenarioOverrides(selected)} style={{...btn,fontSize:11,padding:"2px 8px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}}>
+                    Clear saved overrides
+                  </button>
+                )}
+              </div>
+              {hasUnsaved&&(
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={discardChanges} style={{...btn,fontSize:12,padding:"4px 12px",background:"transparent",border:`1px solid ${T.border}`,color:T.textMid}}>Discard</button>
+                  <button onClick={saveToScenario} style={{...btn,fontSize:12,padding:"4px 14px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}}>
+                    Save to "{selected}"
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{padding:16,maxWidth:1340,margin:"0 auto"}}>
+
+        {/* ══ MODEL TAB ══ */}
+        {tab==="model"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+            {/* ── TOP: KPIs + charts ── */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+              <KPI large label="Gross Revenue" value={fmtD(result.totalGross)} sub={`Budget: ${fmtD(result.productionBudget)}`}/>
+              <KPI large label="Investor Return" value={fmtD(result.totalInvestorReturn)} sub={`Principal: ${fmtD(result.investorPrincipal)}`}/>
+              <KPI large label="Investor ROI" value={fmtPct(result.investorROI)} sub={result.investorPrincipal>0?(result.totalInvestorReturn/result.investorPrincipal).toFixed(2)+"x":"—"} accent={result.investorROI>=0?T.green:T.red}/>
+              <KPI large label="NTI Margin" value={result.totalGross>0?fmtPct(result.netToInvestors/result.totalGross):"—"} sub={`NTI: ${fmtD(result.netToInvestors)}`} accent={T.purple}/>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={card}>
+                <div style={slab}>Revenue by Stream</div>
+                {result.revenueBreakdown.map((s,i)=><WaterfallBar key={s.name} label={s.name} value={s.gross} max={result.totalGross} color={CL[i]}/>)}
+              </div>
+              <div style={card}>
+                <div style={slab}>Net to Investors by Stream</div>
+                {result.revenueBreakdown.map((s,i)=><WaterfallBar key={s.name} label={s.name} value={s.net} max={result.netToInvestors} color={CL[i]}/>)}
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={slab}>Investor Recoup Stack</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+                <KPI label="Principal" value={fmtD(result.investorPrincipal)}/>
+                <KPI label="Premium (20%)" value={fmtD(result.investorPremium)} accent={result.investorROI>=0.2?T.green:T.red}/>
+                <KPI label="Backend (50pts)" value={fmtD(Math.max(0,result.investorBackend))} accent={T.purple}/>
+                <KPI label="Total Return" value={fmtD(result.totalInvestorReturn)} accent={T.gold}/>
+                <KPI label="Net P&L" value={fmtD(result.totalInvestorReturn-result.investorPrincipal)} accent={result.investorROI>=0?T.green:T.red}/>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={card}>
+                <div style={slab}>Artist Economics</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}}>
+                  {[["Upfront Fee",scenarioData.artistFee,T.gold],[`Backend (${rates.backendArtist}pts)`,result.artistBackend,T.blue],["Total Artist Income",result.totalArtistIncome,T.green]].map(([l,v,c])=>(
+                    <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}}>
+                      <span style={{color:T.textDim}}>{l}</span><span style={{color:c,fontWeight:600}}>{fmtD(v)}</span>
+                    </div>
+                  ))}
+                  {!result.royaltyTopLine&&(
+                    <div style={{marginTop:4,padding:"6px 8px",background:T.greenBg,border:`1px solid rgba(26,110,58,0.2)`,borderRadius:4}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontFamily:MN,fontSize:fs-2}}>
+                        <span style={{color:T.textDim}}>Label Royalty ({fmtPct(effectiveRates.labelRoyalty)} of backend)</span>
+                        <span style={{color:T.green,fontWeight:600}}>{fmtD(result.labelRoyaltyBackend)}</span>
+                      </div>
+                      <div style={{fontSize:10,color:T.textDim,marginTop:2}}>Informational · not deducted from waterfall</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={card}>
+                <div style={slab}>TRM Economics</div>
+                <div style={{display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}}>
+                  {[["Deferred Fee",result.trmDeferred,T.purple],["Premium",result.trmPremiumAmt,T.purple],[`Backend (${result.trmBackendPts}pts)`,result.trmBackend,T.blue],["Total TRM Return",result.totalTRMReturn,T.green]].map(([l,v,c])=>(
+                    <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}}>
+                      <span style={{color:T.textDim}}>{l}</span><span style={{color:c,fontWeight:600}}>{fmtD(v)}</span>
+                    </div>
+                  ))}
+                  <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:4}}>TRM pts = 100 − 50 − {rates.backendArtist} (artist) = {result.trmBackendPts}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── BOTTOM: Adjustable panels side by side in 4-col grid ── */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,alignItems:"start"}}>
+
+              {/* Revenue Inputs */}
+              <div style={card}>
+                <div style={slab}>Revenue Inputs</div>
+                <Slider fs={fs} label="Vinyl Units" value={overrides.vinyl??scenarioData.vinyl??0} onChange={v=>upOv("vinyl",v)} min={0} max={1500000} step={5000} fmt={fmtShort}/>
+                <Slider fs={fs} label="CD Units" value={overrides.cd??scenarioData.cd??0} onChange={v=>upOv("cd",v)} min={0} max={1000000} step={2500} fmt={fmtShort}/>
+                <Slider fs={fs} label="GBO" value={overrides.gbo??scenarioData.gbo??0} onChange={v=>upOv("gbo",v)} min={0} max={20000000} step={100000} fmt={fmtD}/>
+                <Slider fs={fs} label="Streaming Sale" value={overrides.streamingSale??scenarioData.streamingSale??0} onChange={v=>upOv("streamingSale",v)} min={0} max={10000000} step={100000} fmt={fmtD}/>
+                <Slider fs={fs} label="Streams" value={overrides.streams??scenarioData.streams??0} onChange={v=>upOv("streams",v)} min={0} max={12000000000} step={50000000} fmt={v=>(v/1e9).toFixed(2)+"B"}/>
+                <Slider fs={fs} label="Merch Units" value={overrides.merchUnits??scenarioData.merchUnits??0} onChange={v=>upOv("merchUnits",v)} min={0} max={200000} step={1000} fmt={fmtShort}/>
+                <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10,marginTop:6}}>
+                  <div style={{fontSize:11,color:T.textDim,fontFamily:MN,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.1em"}}>Price Assumptions</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    {[["Vinyl MSRP","vinylMSRP","number","$"],["Merch ASP","merchASP","number","$"],["$/Stream","revenuePerStream","number",""]].map(([l,k,t,pre])=>(
+                      <div key={k}>
+                        <div style={{fontSize:10,color:T.textFaint,fontFamily:MN,marginBottom:2}}>{l}</div>
+                        <input type={t} step={k==="revenuePerStream"?"0.0005":"1"} value={effectiveRates[k]} onChange={e=>upRate(k,Number(e.target.value))}
+                          style={{width:"100%",padding:"5px 6px",background:T.inputBg,border:`1px solid ${T.inputBorder}`,borderRadius:3,color:T.text,fontFamily:MN,fontSize:14,outline:"none"}}/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Artist Deal + Royalties stacked */}
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div style={card}>
+                  <div style={slab}>Artist Deal</div>
+                  <Slider fs={fs} label="Artist Fee" value={overrides.artistFee??scenarioData.artistFee??0} onChange={v=>upOv("artistFee",v)} min={0} max={4000000} step={50000} fmt={fmtD}/>
+                  <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}}>Fixed — excluded from budget scaling</div>
+                  <Slider fs={fs} label={`Artist Backend: ${effectiveRates.backendArtist}pts`} value={effectiveRates.backendArtist} onChange={v=>upRate("backendArtist",v)} min={0} max={50} step={1} fmt={v=>v+"pts"}/>
+                  <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4}}>TRM = 100 − 50 − {rates.backendArtist} = {trmPts(rates.backendArtist)}pts</div>
+                </div>
+                <div style={card}>
+                  <div style={slab}>Royalties & Fees</div>
+                  {/* Label Royalty Mode Toggle */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"7px 10px",borderRadius:4,background:royaltyTopLine?T.redBg:T.greenBg,border:`1px solid ${royaltyTopLine?"rgba(176,48,48,0.2)":"rgba(26,110,58,0.2)"}`}}>
+                    <div>
+                      <div style={{fontSize:11,fontFamily:MN,fontWeight:700,color:royaltyTopLine?T.red:T.green,textTransform:"uppercase",letterSpacing:"0.08em"}}>Label Royalty Mode</div>
+                      <div style={{fontSize:10,fontFamily:MN,color:T.textDim,marginTop:2}}>{royaltyTopLine?"Deducted off gross (Dig / Whl / D2C)":"12% of artist backend only"}</div>
+                    </div>
+                    <button onClick={()=>setRoyaltyTopLine(v=>!v)} style={{...btn,padding:"4px 10px",fontSize:10,fontFamily:MN,fontWeight:700,letterSpacing:"0.06em",background:royaltyTopLine?T.red:T.green,color:"#fff",border:"none",borderRadius:3}}>
+                      {royaltyTopLine?"TOP-LINE":"BACKEND"}
+                    </button>
+                  </div>
+                  <Slider fs={fs} label="Mainfactor Fee" value={effectiveRates.mainfactorFee} onChange={v=>upRate("mainfactorFee",v)} min={0.05} max={0.30} step={0.01} fmt={fmtPct}/>
+                  <Slider fs={fs} label="Orchard Fee" value={effectiveRates.orchardFee} onChange={v=>upRate("orchardFee",v)} min={0.10} max={0.30} step={0.01} fmt={fmtPct}/>
+                  <Slider fs={fs} label="Label Royalty" value={effectiveRates.labelRoyalty} onChange={v=>upRate("labelRoyalty",v)} min={0.05} max={0.25} step={0.01} fmt={fmtPct}/>
+                </div>
+              </div>
+
+              {/* Production Budget */}
+              <div style={card}>
+                <div style={slab}>Production Budget</div>
+                {(()=>{
+                  const editedTotal=Object.values(result.budgetLines).reduce((a,v)=>a+v,0);
+                  const derivedPct=Math.round(editedTotal/TOTAL_STANDARD_BUDGET*100);
+                  const hasLineEdits=Object.keys(budgetLineEdits).length>0||(Object.keys((scenarios[selected]||{})._budgetLineEdits||{}).length>0&&Object.keys(budgetLineEdits).length===0);
+                  return (
+                    <>
+                      <div style={{marginBottom:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+                          <span style={{fontSize:11,fontFamily:MN,color:T.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}}>Budget Scale</span>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:14,fontFamily:MN,fontWeight:700,color:hasLineEdits?T.gold:T.text}}>{hasLineEdits?derivedPct:activeBudgetPct}%</span>
+                            {hasLineEdits&&<button onClick={()=>{setBudgetLineEdits({});markDirty();}} style={{...btn,fontSize:10,padding:"1px 7px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}}>Reset</button>}
+                          </div>
+                        </div>
+                        <input type="range" min={30} max={100} step={5}
+                          value={hasLineEdits?derivedPct:activeBudgetPct}
+                          onChange={e=>{
+                            const pct=Number(e.target.value);
+                            const scaled={};
+                            ["budgetATL","budgetBTL","budgetPost","budgetDesign","budgetAlbumMfg","budgetMerchMfg","budgetMarketing","budgetMgmtExpenses"].forEach(k=>{
+                              scaled[k]=Math.round(DR[k]*pct/100);
+                            });
+                            setBudgetLineEdits(scaled);
+                            upBudgetPct(pct);
+                            markDirty();
+                          }}
+                          style={{width:"100%"}}/>
+                        <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:3}}>Drag to scale all lines · individual lines editable below</div>
+                      </div>
+                    </>
+                  );
+                })()}
+                <div style={{fontFamily:MN,fontSize:fs-2,color:T.textMid}}>
+                  {[
+                    ["ATL","budgetATL",result.budgetLines.atl],
+                    ["BTL","budgetBTL",result.budgetLines.btl],
+                    ["Post","budgetPost",result.budgetLines.post],
+                    ["Design","budgetDesign",result.budgetLines.design],
+                    ["Album Mfg","budgetAlbumMfg",result.budgetLines.albumMfg],
+                    ["Merch Mfg","budgetMerchMfg",result.budgetLines.merchMfg],
+                    ["Marketing","budgetMarketing",result.budgetLines.marketing],
+                    ["Mgmt","budgetMgmtExpenses",result.budgetLines.mgmt],
+                  ].map(([l,k,v])=>{
+                    const isOpen=editingBudgetKey===k;
+                    const isEdited=budgetLineEdits[k]!==undefined;
+                    // Marketing overrun: budgeted > neededMktg
+                    const mktgFlag=k==="budgetMarketing"&&result.neededMktg>0&&v>result.neededMktg;
+                    return (
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"2px 0",borderBottom:`1px solid ${T.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <span style={{color:isOpen?T.gold:isEdited?T.gold:T.textDim,fontSize:10}}>{l}{isOpen?" ✎":""}</span>
+                          {mktgFlag&&!isOpen&&(
+                            <span title={`Marketing budget ${fmtD(v)} exceeds needed ${fmtD(result.neededMktg)} at current ROAS target. Consider reducing to ${fmtD(Math.round(result.neededMktg/1000)*1000)}.`}
+                              style={{fontSize:9,fontFamily:MN,padding:"0px 4px",borderRadius:2,background:T.orangeBg||"rgba(180,100,0,0.1)",color:T.orange||"#b46400",border:`1px solid ${T.orange||"#b46400"}33`,cursor:"help"}}>
+                              ⚠ over ROAS target
+                            </span>
+                          )}
+                        </div>
+                        {isOpen?(
+                          <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                            <input autoFocus type="number" value={editingBudgetVal}
+                              onChange={e=>setEditingBudgetVal(e.target.value)}
+                              onKeyDown={e=>{ if(e.key==="Enter") saveBudgetLineEdit(k,editingBudgetVal); if(e.key==="Escape") cancelBudgetLineEdit(); }}
+                              onBlur={()=>saveBudgetLineEdit(k,editingBudgetVal)}
+                              style={{width:80,padding:"1px 4px",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:10,outline:"none"}}/>
+                            <button onMouseDown={e=>{e.preventDefault();saveBudgetLineEdit(k,editingBudgetVal);}} style={{...btn,fontSize:9,padding:"1px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}}>✓</button>
+                            <button onMouseDown={e=>{e.preventDefault();cancelBudgetLineEdit();}} style={{...btn,fontSize:9,padding:"1px 5px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}}>✕</button>
+                          </div>
+                        ):(
+                          <button onClick={()=>{setEditingBudgetKey(k);setEditingBudgetVal(String(v));}}
+                            style={{...btn,fontSize:10,padding:"0",background:"none",border:"none",color:isEdited?T.gold:T.text,fontFamily:MN,fontWeight:600}}>{fmtD(v)}</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}}>
+                  <span style={{color:T.textDim}}>Total</span><span style={{color:T.gold}}>{fmtD(result.productionBudget)}</span>
+                </div>
+                <Slider fs={fs} label={`TRM Deferral: ${fmtD(effectiveRates.trmDeferral)}`} value={effectiveRates.trmDeferral} onChange={v=>upRate("trmDeferral",v)} min={0} max={1000000} step={25000} fmt={fmtD}/>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"2px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}}>
+                  <span style={{color:T.textDim}}>Total incl. Deferral</span><span style={{color:T.gold}}>{fmtD(result.productionBudget+rates.trmDeferral)}</span>
+                </div>
+                {(result.albumMfgOverage>0||result.merchMfgOverage>0)&&(
+                  <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
+                    {result.albumMfgOverage>0&&<div style={{padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}}>⚠ Album mfg budget ↑ by {fmtD(result.albumMfgOverage)}</div>}
+                    {result.merchMfgOverage>0&&<div style={{padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}}>⚠ Merch mfg budget ↑ by {fmtD(result.merchMfgOverage)}</div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Marketing */}
+              <div style={card}>
+                <div style={slab}>Marketing</div>
+                <Slider fs={fs} label="Orchard Drawdown" value={overrides.orchardDrawdown??scenarioData.orchardDrawdown??0} onChange={v=>upOv("orchardDrawdown",v)} min={0} max={1000000} step={25000} fmt={fmtD}/>
+                <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}}>Max $1M · Recouped from album revenue</div>
+                <Slider fs={fs} label="Trafalgar P&A" value={trafPA} onChange={v=>upOv("pa",v)} min={0} max={1200000} step={25000} fmt={fmtD}/>
+                <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}}>Defaults to match dist. costs</div>
+                <Slider fs={fs} label={`Target ROAS: ${effectiveRates.targetROAS||5}×`} value={effectiveRates.targetROAS||5} onChange={v=>upRate("targetROAS",v)} min={1} max={15} step={0.5} fmt={v=>v+"×"}/>
+                <div style={{fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}}>Higher ROAS = lower needed marketing budget</div>
+                <div style={{background:T.bgDeep,borderRadius:5,padding:"10px 12px",border:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:11,color:T.textDim,fontFamily:MN,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>ROAS</div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
+                    <span style={{fontSize:24,fontFamily:SR,color:result.roas>=3?T.green:result.roas>=1.5?T.gold:T.red,fontWeight:700}}>{result.roas.toFixed(2)}×</span>
+                    <span style={{fontSize:10,color:T.textDim,fontFamily:MN}}>per $1 marketing</span>
+                  </div>
+                  {[["Core Marketing",result.budgetLines.marketing],["Orchard Drawdown",scenarioData.orchardDrawdown||0],["Trafalgar P&A",trafPA],["Total Marketing",result.totalMarketing],[`Needed (÷${effectiveRates.targetROAS||5} ROAS)`,result.neededMktg],["Album+Merch Gross",result.neededMktg*(effectiveRates.targetROAS||5)]].map(([l,v],i)=>(
+                    <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"2px 0",borderTop:i===3?`1px solid ${T.border}`:"none",fontFamily:MN,fontSize:fs-2,fontWeight:i>=3?600:400,color:i===5?T.gold:i>=3?T.text:T.textDim}}>
+                      <span>{l}</span><span>{fmtD(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+        {/* ══ COMPARE TAB ══ */}
+        {tab==="compare"&&(
+          <div style={{...card,padding:0,overflow:"hidden"}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:1000}}>
+                <thead>
+                  <tr style={{borderBottom:`2px solid ${T.border}`,background:T.bgSub}}>
+                    {[
+                      {h:"Scenario",  sortKey:null},
+                      {h:"Gross",     sortKey:"totalGross"},
+                      {h:"NTC",       sortKey:null},
+                      {h:"Inv. Principal", sortKey:null},
+                      {h:"Inv. Return",   sortKey:"totalInvestorReturn"},
+                      {h:"ROI",       sortKey:"investorROI"},
+                      {h:"Artist Fee",    sortKey:"artistFeeVal"},
+                      {h:"Artist Total",  sortKey:null},
+                      {h:"TRM",       sortKey:null},
+                      {h:"Net Proceeds",  sortKey:"netProceeds"},
+                    ].map(({h,sortKey})=>{
+                      const active=compareSort.col===sortKey&&sortKey;
+                      const arrow=active?(compareSort.dir===1?"↑":"↓"):"";
+                      return (
+                        <th key={h} onClick={sortKey?()=>setCompareSort(p=>p.col===sortKey?{col:sortKey,dir:-p.dir}:{col:sortKey,dir:-1}):undefined}
+                          style={{textAlign:h==="Scenario"?"left":"right",padding:"10px 12px",color:active?T.gold:T.textDim,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",whiteSpace:"nowrap",cursor:sortKey?"pointer":"default",userSelect:"none"}}>
+                          {h}{arrow&&<span style={{marginLeft:4,fontSize:10}}>{arrow}</span>}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(()=>{
+                    let rows=Object.entries(scenarios).map(([name,s])=>{
+                      const r=run(s,effectiveRates,budgetPct/100);
+                      return {name,s,r,artistFeeVal:s.artistFee||0};
+                    });
+                    if(compareSort.col){
+                      rows.sort((a,b)=>{
+                        const av=compareSort.col==="artistFeeVal"?a.artistFeeVal:a.r[compareSort.col]||0;
+                        const bv=compareSort.col==="artistFeeVal"?b.artistFeeVal:b.r[compareSort.col]||0;
+                        return (av-bv)*compareSort.dir;
+                      });
+                    }
+                    return rows.map(({name,s,r,artistFeeVal})=>(
+                      <tr key={name} className="hover-row" onClick={()=>{setSelected(name);setTab("model");}} style={{borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selected===name?T.goldBg:"transparent"}}>
+                        <td style={{padding:"8px 12px",color:selected===name?T.gold:T.text,fontWeight:selected===name?600:400,whiteSpace:"nowrap"}}>{name}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textMid}}>{fmtD(r.totalGross)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textMid}}>{fmtD(r.totalNTC)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textMid}}>{fmtD(r.investorPrincipal)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.gold,fontWeight:600}}>{fmtD(r.totalInvestorReturn)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:r.investorROI>=0?T.green:T.red,fontWeight:700}}>{fmtPct(r.investorROI)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textDim}}>{fmtD(artistFeeVal)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textMid}}>{fmtD(r.totalArtistIncome)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:T.textMid}}>{fmtD(r.totalTRMReturn)}</td>
+                        <td style={{textAlign:"right",padding:"8px 12px",color:r.netProceeds>0?T.green:T.textDim}}>{fmtD(r.netProceeds)}</td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+            <div style={{padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}}>Click any row → full model view · Click column headers to sort</div>
+          </div>
+        )}
+
+        {/* ══ WATERFALL TAB ══ */}
+        {tab==="waterfall"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:760}}>
+            <div style={{fontFamily:SR,fontSize:21,color:T.gold}}>{selected}</div>
+            <div style={card}>
+              <div style={slab}>Gross Revenue → NTC</div>
+              {result.revenueBreakdown.map((s,i)=>(
+                <div key={s.name} style={{marginBottom:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,flexWrap:"wrap",gap:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7}}><div style={{width:6,height:6,borderRadius:2,background:CL[i]}}/><span style={{fontFamily:MN,fontSize:fs-2,fontWeight:500}}>{s.name}</span></div>
+                    <div style={{display:"flex",gap:14}}><span style={{fontFamily:MN,fontSize:fs-2,color:T.textDim}}>{fmtD(s.gross)} → {fmtD(s.net)}</span><span style={{fontFamily:MN,fontSize:fs-2,color:CL[i]}}>{s.gross>0?fmtPct(s.net/s.gross)+" kept":"—"}</span></div>
+                  </div>
+                  <div style={{height:5,background:T.bgDeep,borderRadius:3,overflow:"hidden"}}>
+                    <div style={{width:result.totalGross>0?(s.gross/result.totalGross*100)+"%":0,height:"100%",background:CL[i]+"30",borderRadius:3,position:"relative"}}>
+                      <div style={{width:s.gross>0?(s.net/s.gross*100)+"%":0,height:"100%",background:CL[i],borderRadius:3}}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={card}>
+              <div style={slab}>NTC → Recoup → Backend</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4,fontFamily:MN,fontSize:fs-2}}>
+                {wfRows.map(([l,v,c],i)=>{
+                  const isTotal=l.startsWith("="),isArrow=l.startsWith("→");
+                  return (
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:isTotal?`1px solid ${T.borderStrong}`:"none",borderBottom:isTotal?`1px solid ${T.borderStrong}`:"none"}}>
+                      <span style={{color:(isTotal||isArrow)?c:T.textDim,fontWeight:isTotal?600:400}}>{l}</span>
+                      <span style={{color:c,fontWeight:(isTotal||isArrow)?700:400}}>{fmtD(v)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══ SCENARIOS TAB ══ */}
+        {tab==="scenarios"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontFamily:SR,fontSize:21,color:T.gold}}>All Scenarios</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setShowBuilder(true)} style={{...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}}>+ New Artist</button>
+                <button onClick={exportScenariosCSV} style={{...btn,padding:"6px 12px",fontSize:12,background:T.blueBg,border:`1px solid rgba(26,78,138,0.3)`,color:T.blue}}>↓ Export CSV</button>
+                <button onClick={()=>csvImportRef.current?.click()} style={{...btn,padding:"6px 12px",fontSize:12,background:"rgba(26,110,58,0.1)",border:`1px solid rgba(26,110,58,0.3)`,color:T.green}}>↑ Import CSV</button>
+                <input ref={csvImportRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>{importScenariosCSV(e.target.files?.[0]);e.target.value="";}}/>
+                <button onClick={()=>{setScenarios(SEED);setRates({...DR});}} style={{...btn,padding:"6px 12px",fontSize:12,background:T.redBg,border:`1px solid rgba(176,48,48,0.3)`,color:T.red}}>Reset Defaults</button>
+              </div>
+            </div>
+            <div style={{...card,padding:0,overflow:"hidden"}}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:900}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${T.border}`,background:T.bgSub}}>
+                      <th style={{textAlign:"left",padding:"10px 12px",color:T.textDim,fontSize:11,textTransform:"uppercase",position:"sticky",left:0,background:T.bgSub,zIndex:2,minWidth:180}}>Scenario</th>
+                      {FIELDS.map(f=><th key={f.k} style={{textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{f.l}</th>)}
+                      <th style={{textAlign:"right",padding:"10px 8px",color:T.gold,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}} title="Per-scenario budget scale. Click lock to override global.">Budget%</th>
+                      <th style={{textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase"}}>ROI</th>
+                      <th style={{width:90}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(scenarios).map(name=>{
+                      const scn=scenarios[name];
+                      const scnBudgetPct=getScenarioBudgetPct(name);
+                      const isLocked=scenarioIsLocked(name);
+                      const res=run(scn,effectiveRates,scnBudgetPct/100);
+                      // ── Flag logic ──────────────────────────────────
+                      const orchDD = scn.orchardDrawdown||0;
+                      const mktgNeeded = res.neededMktg||0;
+                      const coreMktg = res.budgetLines?.marketing||0;
+                      const orchOverage = Math.max(0, orchDD - Math.max(0, mktgNeeded - coreMktg));
+                      const flags = [];
+                      if (orchOverage > 0) flags.push({
+                        label:`Orch DD ${fmtD(orchOverage)} over needed`,
+                        color:T.orange, tip:`Orchard drawdown exceeds marketing need by ${fmtD(orchOverage)}. Consider reducing to ${fmtD(Math.max(0,orchDD-orchOverage))}.`
+                      });
+                      if (res.albumMfgOverage>0) flags.push({
+                        label:`Album mfg +${fmtD(res.albumMfgOverage)}`,
+                        color:T.red, tip:`Album mfg budget exceeds actual needs by ${fmtD(res.albumMfgOverage)}.`
+                      });
+                      if (res.merchMfgOverage>0) flags.push({
+                        label:`Merch mfg +${fmtD(res.merchMfgOverage)}`,
+                        color:T.red, tip:`Merch mfg budget exceeds actual needs by ${fmtD(res.merchMfgOverage)}.`
+                      });
+                      const bk="scnbudget:"+name, editingBudget=editingCell===bk;
+                      return (
+                        <tr key={name} className="hover-row" style={{borderBottom:`1px solid ${T.border}`}}>
+                          <td style={{padding:"6px 12px",position:"sticky",left:0,background:T.bg,zIndex:1}}>
+                            <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                              <span onClick={()=>{setSelected(name);setTab("model");}} style={{color:selected===name?T.gold:T.text,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,whiteSpace:"nowrap"}}>{name}</span>
+                              {flags.length>0&&(
+                                <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                                  {flags.map((f,i)=>(
+                                    <span key={i} title={f.tip} style={{fontSize:9,fontFamily:MN,padding:"1px 5px",borderRadius:3,background:f.color+"18",color:f.color,border:`1px solid ${f.color}33`,cursor:"help",letterSpacing:"0.04em"}}>
+                                      ⚠ {f.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          {FIELDS.map(f=>{
+                            const ck=name+":"+f.k, editing=editingCell===ck;
+                            return (
+                              <td key={f.k} style={{textAlign:"right",padding:"5px 8px"}} onClick={()=>{setEditingCell(ck);setEditVal(String(scn[f.k]||"")); }}>
+                                {editing?(
+                                  <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
+                                    onBlur={()=>{const n=Number(editVal.replace(/[^0-9.-]/g,""));if(!isNaN(n))setScenarios(p=>({...p,[name]:{...p[name],[f.k]:n}}));setEditingCell(null);}}
+                                    onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingCell(null);}}
+                                    style={{width:90,padding:"2px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}}/>
+                                ):(
+                                  <span style={{color:T.textMid,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,paddingBottom:1}}>{f.fmt(scn[f.k])}</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          {/* Per-scenario Budget% column */}
+                          <td style={{textAlign:"right",padding:"5px 8px"}}>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}}>
+                              {editingBudget?(
+                                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
+                                  onBlur={()=>{const n=Number(editVal.replace(/[^0-9]/g,""));if(n>=10&&n<=100){setScenarioBudgetPct(name,n);}setEditingCell(null);}}
+                                  onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingCell(null);}}
+                                  style={{width:44,padding:"2px 4px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}}/>
+                              ):(
+                                <span onClick={()=>{setEditingCell(bk);setEditVal(String(scnBudgetPct));}}
+                                  style={{color:isLocked?T.gold:T.textDim,cursor:"pointer",fontFamily:MN,fontSize:fs-2}}>
+                                  {scnBudgetPct}%
+                                </span>
+                              )}
+                              <span
+                                onClick={()=>isLocked?clearScenarioBudget(name):setScenarioBudgetPct(name,scnBudgetPct)}
+                                title={isLocked?"Click to unlock — revert to global budget":"Click to lock this budget to scenario"}
+                                style={{cursor:"pointer",fontSize:9,padding:"2px 7px",borderRadius:8,fontFamily:MN,fontWeight:700,letterSpacing:"0.05em",
+                                  background:isLocked?T.gold:"transparent",
+                                  color:isLocked?"#fff":T.textFaint,
+                                  border:`1px solid ${isLocked?T.gold:T.border}`}}>
+                                {isLocked?"LOCKED":"GLOBAL"}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{textAlign:"right",padding:"5px 8px",color:res.investorROI>=0?T.green:T.red,fontWeight:700}}>{fmtPct(res.investorROI)}</td>
+                          <td style={{padding:"5px 8px",textAlign:"right",whiteSpace:"nowrap"}}>
+                            <button onClick={()=>duplicateScenario(name)} style={{...btn,padding:"2px 7px",background:"transparent",color:T.blue,fontSize:15}} title="Duplicate">⧉</button>
+                            <button onClick={()=>deleteScenario(name)} style={{...btn,padding:"2px 7px",background:confirmDelete===name?T.redBg:"transparent",color:T.red,fontSize:14,marginLeft:3}}>{confirmDelete===name?"sure?":"✕"}</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}}>Click value to edit inline · Click name → Model view · ⧉ duplicate · ✕ delete (twice) · Hover flag badges for details</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══ BACKEND TAB ══ */}
+      {tab==="backend"&&(
+        <div style={{padding:"0 20px 40px"}}>
+          <BackendTab s={scenarioData} r={effectiveRates} budgetPct={Object.keys(budgetLineEdits).length>0?100:budgetPct} royaltyTopLine={royaltyTopLine} onToggleRoyalty={()=>setRoyaltyTopLine(v=>!v)}/>
+        </div>
+      )}
+
+      {showBuilder&&<ProjectionsBuilder
+  onSave={(name,data)=>{saveScenario(name,data);}}
+  onCancel={()=>setShowBuilder(false)}
+/>}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(TheRoundModel));
+  </script>
+</body>
+</html>
