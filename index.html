@@ -1,63 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>The Round -- Financial Model</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
-<style>*{box-sizing:border-box;margin:0;padding:0}
-body{background:#f7f5f1}
-input[type=range]{-webkit-appearance:none;background:rgba(0,0,0,0.09);border-radius:2px;height:3px;outline:none;cursor:pointer}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#8a6800;cursor:pointer;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.18)}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px}
-.hover-row:hover td{background:#f7f6f4!important}
-.scn-btn:hover{border-color:rgba(138,104,0,0.25)!important;color:#8a6800!important}</style>
-</head>
-<body>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#f7f5f1}input[type=range]{-webkit-appearance:none;background:rgba(0,0,0,0.09);border-radius:2px;height:3px;outline:none;cursor:pointer}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#8a6800;cursor:pointer;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.18)}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px}.hover-row:hover td{background:#f7f6f4!important}.scn-btn:hover{border-color:rgba(138,104,0,0.25)!important;color:#8a6800!important}</style>
+</head><body>
 <div id="root"></div>
-<script>window.storage={get:async(key)=>{try{const v=localStorage.getItem(key);return v!=null?{value:v}:null;}catch(e){return null;}},set:async(key,value)=>{try{localStorage.setItem(key,value);return{key,value};}catch(e){return null;}},delete:async(key)=>{try{localStorage.removeItem(key);return{key,deleted:true};}catch(e){return null;}},list:async(prefix)=>{try{const keys=Object.keys(localStorage).filter(k=>!prefix||k.startsWith(prefix));return{keys};}catch(e){return{keys:[];}}}};</script>
+<script>window.storage={get:async(key)=>{try{const v=localStorage.getItem(key);return v!=null?{value:v}:null;}catch(e){return null;}},set:async(key,value)=>{try{localStorage.setItem(key,value);return{key,value};}catch(e){return null;}},delete:async(key)=>{try{localStorage.removeItem(key);return{key,deleted:true};}catch(e){return null;}},list:async(prefix)=>{try{const keys=Object.keys(localStorage).filter(k=>!prefix||k.startsWith(prefix));return{keys};}catch(e){return{keys:[]}}}}</script>
+<script>const {useState,useMemo,useEffect,useCallback,useRef}=React;</script>
+<script>window.onerror=function(msg,src,line,col,err){var d=err?(err.stack||err.toString()):msg;document.getElementById("root").innerHTML="<div style='padding:40px;font-family:monospace;color:#b00;background:#fff1f0;border:1px solid #ffa39e;margin:20px;border-radius:4px'><strong>Error (line "+line+" col "+col+"):</strong><br/>"+msg+"<br/><small>"+d.substring(0,300)+"</small></div>";return false;};</script>
 <script>
-const {useState,useMemo,useEffect,useCallback,useRef}=React;
-</script>
-<script>
-window.onerror=function(msg,src,line,col){
-  document.getElementById("root").innerHTML=
-    "<div style='padding:40px;font-family:monospace;color:#b00;background:#fff1f0;border:1px solid #ffa39e;margin:20px;border-radius:4px'>"+
-    "<strong>Error (line "+line+" col "+col+"):</strong><br/>"+msg+"</div>";
-};
-</script>
-<script>
-
-function _nullishCoalesce(lhs, rhsFn) { if (lhs != null && lhs !== void 0) { return lhs; } else { return rhsFn(); } }
-function _optionalChain(ops) {
-  let lastAccessLHS = undefined;
-  let value = ops[0];
-  let i = 1;
-  while (i < ops.length) {
-    const op = ops[i];
-    const fn = ops[i + 1];
-    i += 2;
-    if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) {
-      return undefined;
-    }
-    if (op === 'access' || op === 'optionalAccess') {
-      lastAccessLHS = value;
-      value = fn(value);
-    } else if (op === 'call' || op === 'optionalCall') {
-      value = fn((...args) => value.call(lastAccessLHS, ...args));
-      lastAccessLHS = undefined;
-    }
-  }
-  return value;
-}
-
-"use strict";const _jsxFileName = "";Object.defineProperty(exports, "__esModule", {value: true}); function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react');
-
-/* ==============================================================
+function _nullishCoalesce(lhs,rhsFn){if(lhs!=null&&lhs!==void 0){return lhs;}else{return rhsFn();}}
+function _optionalChain(ops){let lastAccessLHS=undefined;let value=ops[0];let i=1;while(i<ops.length){const op=ops[i];const fn=ops[i+1];i+=2;if((op==='optionalAccess'||op==='optionalCall')&&value==null){return undefined;}if(op==='access'||op==='optionalAccess'){lastAccessLHS=value;value=fn(value);}else if(op==='call'||op==='optionalCall'){value=fn((...args)=>value.call(lastAccessLHS,...args));lastAccessLHS=undefined;}}return value;}
+function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }/* ==============================================================
    THE ROUND  --  UNIFIED FINANCIAL MODEL v4
    Light / white theme  --  all requested changes applied
    ============================================================== */
@@ -617,10 +574,10 @@ const TIPS = {
 // -- Tooltip ------------------------------------------------------
 // Uses viewport-fixed positioning so it can never be clipped by parent overflow
 function Tip({ id }) {
-  const [open, setOpen] = _react.useState.call(void 0, false);
-  const [pos, setPos]   = _react.useState.call(void 0, { top:0, left:0 });
-  const btnRef = _react.useRef.call(void 0, null);
-  const boxRef = _react.useRef.call(void 0, null);
+  const [open, setOpen] = React.useState.call(void 0, false);
+  const [pos, setPos]   = React.useState.call(void 0, { top:0, left:0 });
+  const btnRef = React.useRef.call(void 0, null);
+  const boxRef = React.useRef.call(void 0, null);
 
   const toggle = (e) => {
     e.stopPropagation();
@@ -635,7 +592,7 @@ function Tip({ id }) {
     setOpen(o => !o);
   };
 
-  _react.useEffect.call(void 0, () => {
+  React.useEffect.call(void 0, () => {
     if (!open) return;
     const close = (e) => {
       if (btnRef.current && !btnRef.current.contains(e.target) &&
@@ -671,8 +628,8 @@ function FL({ children, tipId }) {
 
 // -- Single editable number ---------------------------------------
 function NumField({ label, tipId, value, onChange, note, prefix="", estimated=false }) {
-  const [editing, setEditing] = _react.useState.call(void 0, false);
-  const [raw, setRaw] = _react.useState.call(void 0, "");
+  const [editing, setEditing] = React.useState.call(void 0, false);
+  const [raw, setRaw] = React.useState.call(void 0, "");
   const commit = () => {
     const n = Number(String(raw).replace(/[^0-9.-]/g,""));
     if (!isNaN(n) && n >= 0) onChange(n);
@@ -700,10 +657,10 @@ function NumField({ label, tipId, value, onChange, note, prefix="", estimated=fa
 // -- Dual Base/High row -------------------------------------------
 // Each side shows the model value, click to override independently
 function DualField({ label, tipId, baseValue, highValue, onBaseChange, onHighChange, note }) {
-  const [editingBase, setEditingBase] = _react.useState.call(void 0, false);
-  const [editingHigh, setEditingHigh] = _react.useState.call(void 0, false);
-  const [rawBase, setRawBase] = _react.useState.call(void 0, "");
-  const [rawHigh, setRawHigh] = _react.useState.call(void 0, "");
+  const [editingBase, setEditingBase] = React.useState.call(void 0, false);
+  const [editingHigh, setEditingHigh] = React.useState.call(void 0, false);
+  const [rawBase, setRawBase] = React.useState.call(void 0, "");
+  const [rawHigh, setRawHigh] = React.useState.call(void 0, "");
 
   const commitBase = () => {
     const n = Number(String(rawBase).replace(/[^0-9.-]/g,""));
@@ -753,10 +710,10 @@ function DualField({ label, tipId, baseValue, highValue, onBaseChange, onHighCha
 
 // -- Dual dollar field --------------------------------------------
 function DualDollarField({ label, tipId, baseValue, highValue, onBaseChange, onHighChange, note }) {
-  const [editingBase, setEditingBase] = _react.useState.call(void 0, false);
-  const [editingHigh, setEditingHigh] = _react.useState.call(void 0, false);
-  const [rawBase, setRawBase] = _react.useState.call(void 0, "");
-  const [rawHigh, setRawHigh] = _react.useState.call(void 0, "");
+  const [editingBase, setEditingBase] = React.useState.call(void 0, false);
+  const [editingHigh, setEditingHigh] = React.useState.call(void 0, false);
+  const [rawBase, setRawBase] = React.useState.call(void 0, "");
+  const [rawHigh, setRawHigh] = React.useState.call(void 0, "");
   const commit = (raw, onChange, setEditing) => {
     const n = Number(String(raw).replace(/[^0-9.-]/g,""));
     if (!isNaN(n) && n >= 0) onChange(n);
@@ -922,85 +879,85 @@ Rules:
 function ProjectionsBuilder({ onSave, onCancel }) {
 
   // Lookup
-  const [artistName, setArtistName]   = _react.useState.call(void 0, "");
-  const [lookupState, setLookupState] = _react.useState.call(void 0, "idle");
-  const [lookupNotes, setLookupNotes] = _react.useState.call(void 0, "");
-  const [estimated, setEstimated] = _react.useState.call(void 0, { followers:false, listeners:false, instagram:false });
+  const [artistName, setArtistName]   = React.useState.call(void 0, "");
+  const [lookupState, setLookupState] = React.useState.call(void 0, "idle");
+  const [lookupNotes, setLookupNotes] = React.useState.call(void 0, "");
+  const [estimated, setEstimated] = React.useState.call(void 0, { followers:false, listeners:false, instagram:false });
 
   // Platform data
-  const [spotifyFollowers,   setSpotifyFollowers]   = _react.useState.call(void 0, null);
-  const [spotifyListeners,   setSpotifyListeners]   = _react.useState.call(void 0, null);
-  const [instagramFollowers, setInstagramFollowers] = _react.useState.call(void 0, null);
+  const [spotifyFollowers,   setSpotifyFollowers]   = React.useState.call(void 0, null);
+  const [spotifyListeners,   setSpotifyListeners]   = React.useState.call(void 0, null);
+  const [instagramFollowers, setInstagramFollowers] = React.useState.call(void 0, null);
 
   // Derived signal overrides
-  const [ovTour, setOvTour]   = _react.useState.call(void 0, false);
-  const [ovInfra, setOvInfra] = _react.useState.call(void 0, false);
-  const [manualTier, setManualTier]   = _react.useState.call(void 0, "arena");
-  const [manualInfra, setManualInfra] = _react.useState.call(void 0, 60);
+  const [ovTour, setOvTour]   = React.useState.call(void 0, false);
+  const [ovInfra, setOvInfra] = React.useState.call(void 0, false);
+  const [manualTier, setManualTier]   = React.useState.call(void 0, "arena");
+  const [manualInfra, setManualInfra] = React.useState.call(void 0, 60);
 
   // Theatrical  --  dual GBO (base uses model base, high uses breakout)
-  const [manualGboBase, setManualGboBase] = _react.useState.call(void 0, null);
-  const [manualGboHigh, setManualGboHigh] = _react.useState.call(void 0, null);
-  const [paOverridden, setPaOverridden]   = _react.useState.call(void 0, false);
-  const [paValue, setPaValue]             = _react.useState.call(void 0, null);
+  const [manualGboBase, setManualGboBase] = React.useState.call(void 0, null);
+  const [manualGboHigh, setManualGboHigh] = React.useState.call(void 0, null);
+  const [paOverridden, setPaOverridden]   = React.useState.call(void 0, false);
+  const [paValue, setPaValue]             = React.useState.call(void 0, null);
 
   // Albums  --  dual overrides
-  const [manualVinylBase, setManualVinylBase] = _react.useState.call(void 0, null);
-  const [manualVinylHigh, setManualVinylHigh] = _react.useState.call(void 0, null);
-  const [manualCdBase, setManualCdBase]       = _react.useState.call(void 0, null);
-  const [manualCdHigh, setManualCdHigh]       = _react.useState.call(void 0, null);
-  const [manualCassetteBase, setManualCassetteBase] = _react.useState.call(void 0, null);
-  const [manualCassetteHigh, setManualCassetteHigh] = _react.useState.call(void 0, null);
-  const [manualStreamsBase, setManualStreamsBase] = _react.useState.call(void 0, null);
-  const [manualStreamsHigh, setManualStreamsHigh] = _react.useState.call(void 0, null);
+  const [manualVinylBase, setManualVinylBase] = React.useState.call(void 0, null);
+  const [manualVinylHigh, setManualVinylHigh] = React.useState.call(void 0, null);
+  const [manualCdBase, setManualCdBase]       = React.useState.call(void 0, null);
+  const [manualCdHigh, setManualCdHigh]       = React.useState.call(void 0, null);
+  const [manualCassetteBase, setManualCassetteBase] = React.useState.call(void 0, null);
+  const [manualCassetteHigh, setManualCassetteHigh] = React.useState.call(void 0, null);
+  const [manualStreamsBase, setManualStreamsBase] = React.useState.call(void 0, null);
+  const [manualStreamsHigh, setManualStreamsHigh] = React.useState.call(void 0, null);
 
   // Streaming sale  --  dual
-  const [streamingSaleBase, setStreamingSaleBase] = _react.useState.call(void 0, 1000000);
-  const [streamingSaleHigh, setStreamingSaleHigh] = _react.useState.call(void 0, 2000000);
+  const [streamingSaleBase, setStreamingSaleBase] = React.useState.call(void 0, 1000000);
+  const [streamingSaleHigh, setStreamingSaleHigh] = React.useState.call(void 0, 2000000);
 
   // Orchard drawdown  --  dual
-  const [orchardBase, setOrchardBase] = _react.useState.call(void 0, 250000);
-  const [orchardHigh, setOrchardHigh] = _react.useState.call(void 0, 500000);
+  const [orchardBase, setOrchardBase] = React.useState.call(void 0, 250000);
+  const [orchardHigh, setOrchardHigh] = React.useState.call(void 0, 500000);
 
   // Merch  --  dual overrides
-  const [manualMerchBase, setManualMerchBase] = _react.useState.call(void 0, null);
-  const [manualMerchHigh, setManualMerchHigh] = _react.useState.call(void 0, null);
+  const [manualMerchBase, setManualMerchBase] = React.useState.call(void 0, null);
+  const [manualMerchHigh, setManualMerchHigh] = React.useState.call(void 0, null);
 
   // Artist fee  --  dual
-  const [artistFeeBase, setArtistFeeBase] = _react.useState.call(void 0, 1000000);
-  const [artistFeeHigh, setArtistFeeHigh] = _react.useState.call(void 0, 1000000);
+  const [artistFeeBase, setArtistFeeBase] = React.useState.call(void 0, 1000000);
+  const [artistFeeHigh, setArtistFeeHigh] = React.useState.call(void 0, 1000000);
 
   // Budget scale  --  dual
-  const [budgetPctBase, setBudgetPctBase] = _react.useState.call(void 0, 100);
-  const [budgetPctHigh, setBudgetPctHigh] = _react.useState.call(void 0, 100);
+  const [budgetPctBase, setBudgetPctBase] = React.useState.call(void 0, 100);
+  const [budgetPctHigh, setBudgetPctHigh] = React.useState.call(void 0, 100);
 
   const hasData = lookupState === "done";
   const sel = { width:"100%", padding:"5px 8px", background:T.inputBg, border:`1px solid ${T.inputBorder}`, borderRadius:4, color:T.text, fontFamily:MN, fontSize:12, outline:"none" };
 
   // -- Derived signals ------------------------------------------
-  const touringTier = _react.useMemo.call(void 0, () => {
+  const touringTier = React.useMemo.call(void 0, () => {
     if (ovTour) return manualTier;
     if (spotifyListeners && instagramFollowers) return autoTouringTier(spotifyListeners, instagramFollowers);
     return "arena";
   }, [ovTour, manualTier, spotifyListeners, instagramFollowers]);
 
-  const infraScore = _react.useMemo.call(void 0, () => {
+  const infraScore = React.useMemo.call(void 0, () => {
     if (ovInfra) return manualInfra;
     if (spotifyListeners && instagramFollowers) return autoMerchInfraScore(spotifyListeners, instagramFollowers, touringTier);
     return 60;
   }, [ovInfra, manualInfra, spotifyListeners, instagramFollowers, touringTier]);
 
-  const depthBand = _react.useMemo.call(void 0, () => {
+  const depthBand = React.useMemo.call(void 0, () => {
     if (!spotifyFollowers || !spotifyListeners) return "mid";
     const r = spotifyFollowers / spotifyListeners;
     return r >= 0.65 ? "high" : r >= 0.35 ? "mid" : "low";
   }, [spotifyFollowers, spotifyListeners]);
 
   // -- Model projections ----------------------------------------
-  const theatProj  = _react.useMemo.call(void 0, () => spotifyFollowers ? projectTheatrical(spotifyFollowers) : null, [spotifyFollowers]);
-  const albumProj  = _react.useMemo.call(void 0, () => spotifyListeners ? projectAlbumSales(spotifyListeners, artistName) : null, [spotifyListeners, artistName]);
-  const streamProj = _react.useMemo.call(void 0, () => spotifyListeners ? projectStreams(spotifyListeners) : null, [spotifyListeners]);
-  const merchProj  = _react.useMemo.call(void 0, () => {
+  const theatProj  = React.useMemo.call(void 0, () => spotifyFollowers ? projectTheatrical(spotifyFollowers) : null, [spotifyFollowers]);
+  const albumProj  = React.useMemo.call(void 0, () => spotifyListeners ? projectAlbumSales(spotifyListeners, artistName) : null, [spotifyListeners, artistName]);
+  const streamProj = React.useMemo.call(void 0, () => spotifyListeners ? projectStreams(spotifyListeners) : null, [spotifyListeners]);
+  const merchProj  = React.useMemo.call(void 0, () => {
     if (!spotifyFollowers || !spotifyListeners) return null;
     return projectMerch({ spotifyFollowers, spotifyListeners, touringTier, instagramFollowers:instagramFollowers||0, merchInfraScore:infraScore, depthBand });
   }, [spotifyFollowers, spotifyListeners, touringTier, instagramFollowers, infraScore, depthBand]);
@@ -1039,7 +996,7 @@ function ProjectionsBuilder({ onSave, onCancel }) {
   });
 
   // -- Live results ---------------------------------------------
-  const resultBase = _react.useMemo.call(void 0, () => {
+  const resultBase = React.useMemo.call(void 0, () => {
     const sc = {
       vinyl:vinylBase, cd:cdBase, cassette:cassetteBase, gbo:gboBase,
       theatDistCost:_optionalChain([theatProj, 'optionalAccess', _26 => _26.distCost])||0, pa,
@@ -1049,7 +1006,7 @@ function ProjectionsBuilder({ onSave, onCancel }) {
     return run(sc, DR, budgetPctBase / 100);
   }, [vinylBase, cdBase, cassetteBase, gboBase, streamsBase, merchBase, artistFeeBase, orchardBase, streamingSaleBase, pa, theatProj, budgetPctBase]);
 
-  const resultHigh = _react.useMemo.call(void 0, () => {
+  const resultHigh = React.useMemo.call(void 0, () => {
     const sc = {
       vinyl:vinylHigh, cd:cdHigh, cassette:cassetteHigh, gbo:gboHigh,
       theatDistCost:_optionalChain([theatProj, 'optionalAccess', _27 => _27.distCost])||0, pa,
@@ -1060,7 +1017,7 @@ function ProjectionsBuilder({ onSave, onCancel }) {
   }, [vinylHigh, cdHigh, cassetteHigh, gboHigh, streamsHigh, merchHigh, artistFeeHigh, orchardHigh, streamingSaleHigh, pa, theatProj, budgetPctHigh]);
 
   // -- Lookup ---------------------------------------------------
-  const doLookup = _react.useCallback.call(void 0, async () => {
+  const doLookup = React.useCallback.call(void 0, async () => {
     if (!artistName.trim()) return;
     setLookupState("loading");
     try {
@@ -1408,7 +1365,7 @@ function ProjectionsBuilder({ onSave, onCancel }) {
 
 // -- Backend Tab  --  faithful recreation of Episode Model-Master-V6 -
 function BackendTab({ s, r, budgetPct, royaltyTopLine=true, onToggleRoyalty }) {
-  const res = _react.useMemo.call(void 0, () => run(s, r, budgetPct / 100), [s, r, budgetPct]);
+  const res = React.useMemo.call(void 0, () => run(s, r, budgetPct / 100), [s, r, budgetPct]);
 
   // -- Pull all intermediates directly from run()  --  single source of truth --
   const gbo          = s.gbo || 0;
@@ -2101,30 +2058,30 @@ const TABS=[["model","Model"],["compare","Compare"],["waterfall","Waterfall"],["
 const FONT_SIZES=[13,14,15,16,18];
 
  function TheRoundModel() {
-  const [scenarios,setScenarios]=_react.useState.call(void 0, SEED);
-  const [selected,setSelected]=_react.useState.call(void 0, "LANA DEL REY  --  LOW");
-  const [tab,setTab]=_react.useState.call(void 0, "model");
-  const [compareSort,setCompareSort]=_react.useState.call(void 0, {col:null,dir:1}); // dir: 1=asc, -1=desc
-  const [rates,setRates]=_react.useState.call(void 0, {...DR});
-  const [royaltyTopLine,setRoyaltyTopLine]=_react.useState.call(void 0, true); // true=deduct at top of waterfall; false=12% of artist backend only
+  const [scenarios,setScenarios]=React.useState.call(void 0, SEED);
+  const [selected,setSelected]=React.useState.call(void 0, "LANA DEL REY  --  LOW");
+  const [tab,setTab]=React.useState.call(void 0, "model");
+  const [compareSort,setCompareSort]=React.useState.call(void 0, {col:null,dir:1}); // dir: 1=asc, -1=desc
+  const [rates,setRates]=React.useState.call(void 0, {...DR});
+  const [royaltyTopLine,setRoyaltyTopLine]=React.useState.call(void 0, true); // true=deduct at top of waterfall; false=12% of artist backend only
   // Working overrides for the current scenario  --  cleared on scenario switch unless saved
-  const [overrides,setOverrides]=_react.useState.call(void 0, {});          // revenue input overrides
-  const [budgetLineEdits,setBudgetLineEdits]=_react.useState.call(void 0, {}); // {rateKey: absoluteValue}
-  const [workingBudgetPct,setWorkingBudgetPct]=_react.useState.call(void 0, null); // null = use global
-  const [workingRateEdits,setWorkingRateEdits]=_react.useState.call(void 0, {});   // fee rate overrides
-  const [hasUnsaved,setHasUnsaved]=_react.useState.call(void 0, false);
-  const [showBuilder,setShowBuilder]=_react.useState.call(void 0, false);
-  const [confirmDelete,setConfirmDelete]=_react.useState.call(void 0, null);
-  const [editingCell,setEditingCell]=_react.useState.call(void 0, null);
-  const [editVal,setEditVal]=_react.useState.call(void 0, "");
-  const [editingBudgetKey,setEditingBudgetKey]=_react.useState.call(void 0, null);  // which budget line is open
-  const [editingBudgetVal,setEditingBudgetVal]=_react.useState.call(void 0, "");    // raw string while typing
-  const csvImportRef=_react.useRef.call(void 0, null);
-  const [budgetPct,setBudgetPct]=_react.useState.call(void 0, 100);  // global default budget scale
-  const [fs,setFs]=_react.useState.call(void 0, 15);
-  const [ready,setReady]=_react.useState.call(void 0, false);
+  const [overrides,setOverrides]=React.useState.call(void 0, {});          // revenue input overrides
+  const [budgetLineEdits,setBudgetLineEdits]=React.useState.call(void 0, {}); // {rateKey: absoluteValue}
+  const [workingBudgetPct,setWorkingBudgetPct]=React.useState.call(void 0, null); // null = use global
+  const [workingRateEdits,setWorkingRateEdits]=React.useState.call(void 0, {});   // fee rate overrides
+  const [hasUnsaved,setHasUnsaved]=React.useState.call(void 0, false);
+  const [showBuilder,setShowBuilder]=React.useState.call(void 0, false);
+  const [confirmDelete,setConfirmDelete]=React.useState.call(void 0, null);
+  const [editingCell,setEditingCell]=React.useState.call(void 0, null);
+  const [editVal,setEditVal]=React.useState.call(void 0, "");
+  const [editingBudgetKey,setEditingBudgetKey]=React.useState.call(void 0, null);  // which budget line is open
+  const [editingBudgetVal,setEditingBudgetVal]=React.useState.call(void 0, "");    // raw string while typing
+  const csvImportRef=React.useRef.call(void 0, null);
+  const [budgetPct,setBudgetPct]=React.useState.call(void 0, 100);  // global default budget scale
+  const [fs,setFs]=React.useState.call(void 0, 15);
+  const [ready,setReady]=React.useState.call(void 0, false);
 
-  _react.useEffect.call(void 0, ()=>{
+  React.useEffect.call(void 0, ()=>{
     (async()=>{
       const STORAGE_VERSION="v8";
       try{
@@ -2141,11 +2098,11 @@ const FONT_SIZES=[13,14,15,16,18];
       setReady(true);
     })();
   },[]);
-  _react.useEffect.call(void 0, ()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-sc",JSON.stringify(scenarios));}catch(e){}})();},[scenarios,ready]);
-  _react.useEffect.call(void 0, ()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-rt",JSON.stringify(rates));}catch(e){}})();},[rates,ready]);
+  React.useEffect.call(void 0, ()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-sc",JSON.stringify(scenarios));}catch(e){}})();},[scenarios,ready]);
+  React.useEffect.call(void 0, ()=>{if(!ready)return;(async()=>{try{await window.storage.set("tr-rt",JSON.stringify(rates));}catch(e){}})();},[rates,ready]);
 
   // When switching scenario, load any saved per-scenario overrides from the scenario object
-  _react.useEffect.call(void 0, ()=>{
+  React.useEffect.call(void 0, ()=>{
     const scn=scenarios[selected]||{};
     setOverrides({});
     setBudgetLineEdits(scn._budgetLineEdits||{});
@@ -2157,11 +2114,11 @@ const FONT_SIZES=[13,14,15,16,18];
   // Mark unsaved whenever working state changes (after initial load)
   const markDirty=()=>setHasUnsaved(true);
 
-  const scenarioData=_react.useMemo.call(void 0, ()=>({...scenarios[selected],...overrides}),[selected,scenarios,overrides]);
+  const scenarioData=React.useMemo.call(void 0, ()=>({...scenarios[selected],...overrides}),[selected,scenarios,overrides]);
 
   // Effective rates = global rates + per-scenario rate edits + budget line absolute overrides
   // Falls back to scenario's saved _budgetLineEdits and _rateEdits when working state is clean
-  const effectiveRates=_react.useMemo.call(void 0, ()=>{
+  const effectiveRates=React.useMemo.call(void 0, ()=>{
     const scn=scenarios[selected]||{};
     const rateBase={...rates,...(scn._rateEdits||{}),...workingRateEdits};
     const lineBase={...(scn._budgetLineEdits||{}),...budgetLineEdits};
@@ -2172,7 +2129,7 @@ const FONT_SIZES=[13,14,15,16,18];
 
   const activeBudgetPct=_nullishCoalesce(_nullishCoalesce(workingBudgetPct, () => (((scenarios[selected]||{})._budgetPct))), () => (budgetPct));
   const budgetPctForRun=Object.keys({...(scenarios[selected]||{})._budgetLineEdits,...budgetLineEdits}).length>0?100:activeBudgetPct;
-  const result=_react.useMemo.call(void 0, ()=>run(scenarioData,effectiveRates,budgetPctForRun/100),[scenarioData,effectiveRates,budgetPctForRun]);
+  const result=React.useMemo.call(void 0, ()=>run(scenarioData,effectiveRates,budgetPctForRun/100),[scenarioData,effectiveRates,budgetPctForRun]);
 
   // Save all current working state back into the scenario object
   const saveToScenario=()=>{
@@ -2315,16 +2272,21 @@ const FONT_SIZES=[13,14,15,16,18];
         }
         const count=Object.keys(parsed).length;
         if(count===0){alert("No valid scenario rows found. Make sure your CSV has a Scenario column with names.");return;}
-        // Confirm then apply  --  move confirm here (outside FileReader callback) avoids async issues
-        const doImport=()=>{
-          setScenarios(parsed);
-          setSelected(Object.keys(parsed)[0]);
-          // Also persist directly to storage so it doesn't get overwritten by stale state
-          try{window.storage.set("tr-sc",JSON.stringify(parsed));}catch(e){}
-        };
-        if(window.confirm(`Import ${count} scenario${count>1?"s":""}? This replaces all current scenarios.`)){
-          doImport();
-        }
+        // Merge: overwrite matching names, add new ones, keep existing unmatched
+        setScenarios(prev=>{
+          const existingNames=Object.keys(prev);
+          const overwritten=Object.keys(parsed).filter(n=>existingNames.includes(n));
+          const added=Object.keys(parsed).filter(n=>!existingNames.includes(n));
+          const merged={...prev,...parsed};
+          try{window.storage.set("tr-sc",JSON.stringify(merged));}catch(e){}
+          const msg=[
+            added.length?`Added: ${added.slice(0,3).join(", ")}${added.length>3?" + "+(added.length-3)+" more":""}`:null,
+            overwritten.length?`Overwritten: ${overwritten.slice(0,3).join(", ")}${overwritten.length>3?" + "+(overwritten.length-3)+" more":""}`:null,
+          ].filter(Boolean).join("\n");
+          setTimeout(()=>alert("Import complete.\n\n"+msg),50);
+          return merged;
+        });
+        setSelected(Object.keys(parsed)[0]);
       } catch(err){alert("Error parsing CSV: "+err.message);}
     };
     reader.readAsText(file);
@@ -2368,30 +2330,30 @@ const FONT_SIZES=[13,14,15,16,18];
   const btn={border:"none",cursor:"pointer",fontFamily:MN,borderRadius:4};
 
   return (
-    React.createElement('div', { style: {minHeight:"100vh",background:T.bg,color:T.text,fontFamily:SS,fontSize:fs}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2314}}
+    React.createElement('div', { style: {minHeight:"100vh",background:T.bg,color:T.text,fontFamily:SS,fontSize:fs}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2319}}
 
       /* Header */
-      , React.createElement('div', { style: {padding:"10px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,background:T.bg,flexWrap:"wrap",gap:8,boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2317}}
-        , React.createElement('div', { style: {display:"flex",alignItems:"baseline",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2318}}
-          , React.createElement('span', { style: {fontFamily:SR,fontSize:22,color:T.gold,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2319}}, "THE ROUND" )
-          , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.1em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2320}}, "FINANCIAL MODEL" )
+      , React.createElement('div', { style: {padding:"10px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,background:T.bg,flexWrap:"wrap",gap:8,boxShadow:"0 1px 6px rgba(0,0,0,0.05)"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2322}}
+        , React.createElement('div', { style: {display:"flex",alignItems:"baseline",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2323}}
+          , React.createElement('span', { style: {fontFamily:SR,fontSize:22,color:T.gold,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2324}}, "THE ROUND" )
+          , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.1em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2325}}, "FINANCIAL MODEL" )
         )
-        , React.createElement('div', { style: {display:"flex",gap:4,background:T.bgDeep,borderRadius:5,padding:3,border:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2322}}
+        , React.createElement('div', { style: {display:"flex",gap:4,background:T.bgDeep,borderRadius:5,padding:3,border:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2327}}
           , TABS.map(([id,label])=>(
-            React.createElement('button', { key: id, onClick: ()=>setTab(id), style: {...btn,padding:"4px 12px",fontSize:12,background:tab===id?T.bg:"transparent",color:tab===id?T.gold:T.textDim,border:tab===id?`1px solid ${T.border}`:"1px solid transparent",boxShadow:tab===id?"0 1px 3px rgba(0,0,0,0.06)":"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2324}}, label)
+            React.createElement('button', { key: id, onClick: ()=>setTab(id), style: {...btn,padding:"4px 12px",fontSize:12,background:tab===id?T.bg:"transparent",color:tab===id?T.gold:T.textDim,border:tab===id?`1px solid ${T.border}`:"1px solid transparent",boxShadow:tab===id?"0 1px 3px rgba(0,0,0,0.06)":"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2329}}, label)
           ))
         )
-        , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2327}}
-          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2328}}
-            , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.08em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2329}}, "SIZE")
+        , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2332}}
+          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2333}}
+            , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textDim,letterSpacing:"0.08em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2334}}, "SIZE")
             , FONT_SIZES.map(size=>(
-              React.createElement('button', { key: size, onClick: ()=>setFs(size), style: {...btn,width:22,height:22,padding:0,background:fs===size?T.goldBg:"transparent",color:fs===size?T.gold:T.textDim,border:`1px solid ${fs===size?T.goldBorder:T.border}`,fontSize:11,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2331}}, size)
+              React.createElement('button', { key: size, onClick: ()=>setFs(size), style: {...btn,width:22,height:22,padding:0,background:fs===size?T.goldBg:"transparent",color:fs===size?T.gold:T.textDim,border:`1px solid ${fs===size?T.goldBorder:T.border}`,fontSize:11,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2336}}, size)
             ))
           )
-          , React.createElement('button', { onClick: ()=>setShowBuilder(true), style: {...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2334}}, "+ New Artist"  )
-          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:5,padding:"3px 8px",borderRadius:4,background:royaltyTopLine?"rgba(176,48,48,0.08)":"rgba(26,110,58,0.08)",border:`1px solid ${royaltyTopLine?"rgba(176,48,48,0.25)":"rgba(26,110,58,0.25)"}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2335}}
-            , React.createElement('span', { style: {fontFamily:MN,fontSize:10,color:royaltyTopLine?T.red:T.green,letterSpacing:"0.08em",fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2336}}, "ROYALTY")
-            , React.createElement('button', { onClick: ()=>setRoyaltyTopLine(v=>!v), style: {...btn,padding:"2px 8px",fontSize:10,fontFamily:MN,fontWeight:700,letterSpacing:"0.06em",background:royaltyTopLine?T.red:T.green,color:"#fff",border:"none",borderRadius:3,minWidth:76}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2337}}
+          , React.createElement('button', { onClick: ()=>setShowBuilder(true), style: {...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2339}}, "+ New Artist"  )
+          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:5,padding:"3px 8px",borderRadius:4,background:royaltyTopLine?"rgba(176,48,48,0.08)":"rgba(26,110,58,0.08)",border:`1px solid ${royaltyTopLine?"rgba(176,48,48,0.25)":"rgba(26,110,58,0.25)"}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2340}}
+            , React.createElement('span', { style: {fontFamily:MN,fontSize:10,color:royaltyTopLine?T.red:T.green,letterSpacing:"0.08em",fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2341}}, "ROYALTY")
+            , React.createElement('button', { onClick: ()=>setRoyaltyTopLine(v=>!v), style: {...btn,padding:"2px 8px",fontSize:10,fontFamily:MN,fontWeight:700,letterSpacing:"0.06em",background:royaltyTopLine?T.red:T.green,color:"#fff",border:"none",borderRadius:3,minWidth:76}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2342}}
               , royaltyTopLine?"TOP-LINE":"BACKEND"
             )
           )
@@ -2400,39 +2362,39 @@ const FONT_SIZES=[13,14,15,16,18];
 
       /* Scenario strip */
       , tab!=="scenarios"&&(
-        React.createElement('div', { style: {borderBottom:`1px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2346}}
-          , React.createElement('div', { style: {padding:"9px 20px",display:"flex",flexWrap:"wrap",gap:4,alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2347}}
-            , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textFaint,letterSpacing:"0.1em",marginRight:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2348}}, "SCENARIO")
+        React.createElement('div', { style: {borderBottom:`1px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2351}}
+          , React.createElement('div', { style: {padding:"9px 20px",display:"flex",flexWrap:"wrap",gap:4,alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2352}}
+            , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:T.textFaint,letterSpacing:"0.1em",marginRight:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2353}}, "SCENARIO")
             , Object.keys(scenarios).map(name=>{
               const locked=scenarioIsLocked(name);
               return (
-                React.createElement('button', { key: name, className: "scn-btn", onClick: ()=>setSelected(name), style: {...btn,padding:"4px 10px",fontSize:Math.max(9,fs-2),background:selected===name?T.goldBg:T.bg,color:selected===name?T.gold:T.textMid,border:`1px solid ${selected===name?T.goldBorder:T.border}`,display:"flex",alignItems:"center",gap:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2352}}
+                React.createElement('button', { key: name, className: "scn-btn", onClick: ()=>setSelected(name), style: {...btn,padding:"4px 10px",fontSize:Math.max(9,fs-2),background:selected===name?T.goldBg:T.bg,color:selected===name?T.gold:T.textMid,border:`1px solid ${selected===name?T.goldBorder:T.border}`,display:"flex",alignItems:"center",gap:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2357}}
                   , name
-                  , locked&&React.createElement('span', { style: {fontSize:9,padding:"1px 5px",borderRadius:8,background:T.gold,color:"#fff",fontFamily:MN,letterSpacing:"0.05em",fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2354}}, "SAVED")
+                  , locked&&React.createElement('span', { style: {fontSize:9,padding:"1px 5px",borderRadius:8,background:T.gold,color:"#fff",fontFamily:MN,letterSpacing:"0.05em",fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2359}}, "SAVED")
                 )
               );
             })
           )
           /* Save bar  --  only on model tab */
           , tab==="model"&&(
-            React.createElement('div', { style: {padding:"7px 20px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:hasUnsaved?"rgba(138,104,0,0.04)":T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2361}}
-              , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2362}}
-                , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2363}}
-                  , React.createElement('div', { style: {width:7,height:7,borderRadius:"50%",background:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textFaint}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2364}})
-                  , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2365}}
+            React.createElement('div', { style: {padding:"7px 20px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:hasUnsaved?"rgba(138,104,0,0.04)":T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2366}}
+              , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2367}}
+                , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2368}}
+                  , React.createElement('div', { style: {width:7,height:7,borderRadius:"50%",background:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textFaint}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2369}})
+                  , React.createElement('span', { style: {fontFamily:MN,fontSize:11,color:hasUnsaved?T.gold:scenarioIsLocked(selected)?T.green:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2370}}
                     , hasUnsaved?"Unsaved changes":scenarioIsLocked(selected)?"Custom budget & fees saved to this scenario":"Using global rates & budget"
                   )
                 )
                 , scenarioIsLocked(selected)&&!hasUnsaved&&(
-                  React.createElement('button', { onClick: ()=>clearScenarioOverrides(selected), style: {...btn,fontSize:11,padding:"2px 8px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2370}}, "Clear saved overrides"
+                  React.createElement('button', { onClick: ()=>clearScenarioOverrides(selected), style: {...btn,fontSize:11,padding:"2px 8px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2375}}, "Clear saved overrides"
 
                   )
                 )
               )
               , hasUnsaved&&(
-                React.createElement('div', { style: {display:"flex",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2376}}
-                  , React.createElement('button', { onClick: discardChanges, style: {...btn,fontSize:12,padding:"4px 12px",background:"transparent",border:`1px solid ${T.border}`,color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2377}}, "Discard")
-                  , React.createElement('button', { onClick: saveToScenario, style: {...btn,fontSize:12,padding:"4px 14px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2378}}, "Save to \""
+                React.createElement('div', { style: {display:"flex",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2381}}
+                  , React.createElement('button', { onClick: discardChanges, style: {...btn,fontSize:12,padding:"4px 12px",background:"transparent",border:`1px solid ${T.border}`,color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2382}}, "Discard")
+                  , React.createElement('button', { onClick: saveToScenario, style: {...btn,fontSize:12,padding:"4px 14px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2383}}, "Save to \""
                       , selected, "\""
                   )
                 )
@@ -2442,95 +2404,95 @@ const FONT_SIZES=[13,14,15,16,18];
         )
       )
 
-      , React.createElement('div', { style: {padding:16,maxWidth:1340,margin:"0 auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2388}}
+      , React.createElement('div', { style: {padding:16,maxWidth:1340,margin:"0 auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2393}}
 
         /* == MODEL TAB == */
         , tab==="model"&&(
-          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2392}}
+          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2397}}
 
             /* -- TOP: KPIs + charts -- */
-            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2395}}
-              , React.createElement(KPI, { large: true, label: "Gross Revenue" , value: fmtD(result.totalGross), sub: `Budget: ${fmtD(result.productionBudget)}`, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2396}})
-              , React.createElement(KPI, { large: true, label: "Investor Return" , value: fmtD(result.totalInvestorReturn), sub: `Principal: ${fmtD(result.investorPrincipal)}`, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2397}})
-              , React.createElement(KPI, { large: true, label: "Investor ROI" , value: fmtPct(result.investorROI), sub: result.investorPrincipal>0?(result.totalInvestorReturn/result.investorPrincipal).toFixed(2)+"x":" -- ", accent: result.investorROI>=0?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2398}})
-              , React.createElement(KPI, { large: true, label: "NTI Margin" , value: result.totalGross>0?fmtPct(result.netToInvestors/result.totalGross):" -- ", sub: `NTI: ${fmtD(result.netToInvestors)}`, accent: T.purple, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2399}})
+            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2400}}
+              , React.createElement(KPI, { large: true, label: "Gross Revenue" , value: fmtD(result.totalGross), sub: `Budget: ${fmtD(result.productionBudget)}`, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2401}})
+              , React.createElement(KPI, { large: true, label: "Investor Return" , value: fmtD(result.totalInvestorReturn), sub: `Principal: ${fmtD(result.investorPrincipal)}`, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2402}})
+              , React.createElement(KPI, { large: true, label: "Investor ROI" , value: fmtPct(result.investorROI), sub: result.investorPrincipal>0?(result.totalInvestorReturn/result.investorPrincipal).toFixed(2)+"x":" -- ", accent: result.investorROI>=0?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2403}})
+              , React.createElement(KPI, { large: true, label: "NTI Margin" , value: result.totalGross>0?fmtPct(result.netToInvestors/result.totalGross):" -- ", sub: `NTI: ${fmtD(result.netToInvestors)}`, accent: T.purple, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2404}})
             )
 
-            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2402}}
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2403}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2404}}, "Revenue by Stream"  )
-                , result.revenueBreakdown.map((s,i)=>React.createElement(WaterfallBar, { key: s.name, label: s.name, value: s.gross, max: result.totalGross, color: CL[i], __self: this, __source: {fileName: _jsxFileName, lineNumber: 2405}}))
+            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2407}}
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2408}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2409}}, "Revenue by Stream"  )
+                , result.revenueBreakdown.map((s,i)=>React.createElement(WaterfallBar, { key: s.name, label: s.name, value: s.gross, max: result.totalGross, color: CL[i], __self: this, __source: {fileName: _jsxFileName, lineNumber: 2410}}))
               )
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2407}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2408}}, "Net to Investors by Stream"    )
-                , result.revenueBreakdown.map((s,i)=>React.createElement(WaterfallBar, { key: s.name, label: s.name, value: s.net, max: result.netToInvestors, color: CL[i], __self: this, __source: {fileName: _jsxFileName, lineNumber: 2409}}))
-              )
-            )
-
-            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2413}}
-              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2414}}, "Investor Recoup Stack"  )
-              , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2415}}
-                , React.createElement(KPI, { label: "Principal", value: fmtD(result.investorPrincipal), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2416}})
-                , React.createElement(KPI, { label: "Premium (20%)" , value: fmtD(result.investorPremium), accent: result.investorROI>=0.2?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2417}})
-                , React.createElement(KPI, { label: "Backend (50pts)" , value: fmtD(Math.max(0,result.investorBackend)), accent: T.purple, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2418}})
-                , React.createElement(KPI, { label: "Total Return" , value: fmtD(result.totalInvestorReturn), accent: T.gold, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2419}})
-                , React.createElement(KPI, { label: "Net P&L" , value: fmtD(result.totalInvestorReturn-result.investorPrincipal), accent: result.investorROI>=0?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2420}})
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2412}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2413}}, "Net to Investors by Stream"    )
+                , result.revenueBreakdown.map((s,i)=>React.createElement(WaterfallBar, { key: s.name, label: s.name, value: s.net, max: result.netToInvestors, color: CL[i], __self: this, __source: {fileName: _jsxFileName, lineNumber: 2414}}))
               )
             )
 
-            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2424}}
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2425}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2426}}, "Artist Economics" )
-                , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2427}}
+            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2418}}
+              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2419}}, "Investor Recoup Stack"  )
+              , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2420}}
+                , React.createElement(KPI, { label: "Principal", value: fmtD(result.investorPrincipal), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2421}})
+                , React.createElement(KPI, { label: "Premium (20%)" , value: fmtD(result.investorPremium), accent: result.investorROI>=0.2?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2422}})
+                , React.createElement(KPI, { label: "Backend (50pts)" , value: fmtD(Math.max(0,result.investorBackend)), accent: T.purple, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2423}})
+                , React.createElement(KPI, { label: "Total Return" , value: fmtD(result.totalInvestorReturn), accent: T.gold, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2424}})
+                , React.createElement(KPI, { label: "Net P&L" , value: fmtD(result.totalInvestorReturn-result.investorPrincipal), accent: result.investorROI>=0?T.green:T.red, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2425}})
+              )
+            )
+
+            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2429}}
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2430}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2431}}, "Artist Economics" )
+                , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2432}}
                   , [["Upfront Fee",scenarioData.artistFee,T.gold],[`Backend (${rates.backendArtist}pts)`,result.artistBackend,T.blue],["Total Artist Income",result.totalArtistIncome,T.green]].map(([l,v,c])=>(
-                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2429}}
-                      , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2430}}, l), React.createElement('span', { style: {color:c,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2430}}, fmtD(v))
+                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2434}}
+                      , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2435}}, l), React.createElement('span', { style: {color:c,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2435}}, fmtD(v))
                     )
                   ))
                   , !result.royaltyTopLine&&(
-                    React.createElement('div', { style: {marginTop:4,padding:"6px 8px",background:T.greenBg,border:`1px solid rgba(26,110,58,0.2)`,borderRadius:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2434}}
-                      , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2435}}
-                        , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2436}}, "Label Royalty ("  , fmtPct(effectiveRates.labelRoyalty), " of backend)"  )
-                        , React.createElement('span', { style: {color:T.green,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2437}}, fmtD(result.labelRoyaltyBackend))
+                    React.createElement('div', { style: {marginTop:4,padding:"6px 8px",background:T.greenBg,border:`1px solid rgba(26,110,58,0.2)`,borderRadius:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2439}}
+                      , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2440}}
+                        , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2441}}, "Label Royalty ("  , fmtPct(effectiveRates.labelRoyalty), " of backend)"  )
+                        , React.createElement('span', { style: {color:T.green,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2442}}, fmtD(result.labelRoyaltyBackend))
                       )
-                      , React.createElement('div', { style: {fontSize:10,color:T.textDim,marginTop:2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2439}}, "Informational . not deducted from waterfall"     )
+                      , React.createElement('div', { style: {fontSize:10,color:T.textDim,marginTop:2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2444}}, "Informational . not deducted from waterfall"     )
                     )
                   )
                 )
               )
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2444}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2445}}, "TRM Economics" )
-                , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2446}}
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2449}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2450}}, "TRM Economics" )
+                , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:5,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2451}}
                   , [["Deferred Fee",result.trmDeferred,T.purple],["Premium",result.trmPremiumAmt,T.purple],[`Backend (${result.trmBackendPts}pts)`,result.trmBackend,T.blue],["Total TRM Return",result.totalTRMReturn,T.green]].map(([l,v,c])=>(
-                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2448}}
-                      , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2449}}, l), React.createElement('span', { style: {color:c,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2449}}, fmtD(v))
+                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2453}}
+                      , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2454}}, l), React.createElement('span', { style: {color:c,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2454}}, fmtD(v))
                     )
                   ))
-                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2452}}, "TRM pts = 100 - 50 - "       , rates.backendArtist, " (artist) = "   , result.trmBackendPts)
+                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2457}}, "TRM pts = 100 - 50 - "       , rates.backendArtist, " (artist) = "   , result.trmBackendPts)
                 )
               )
             )
 
             /* -- BOTTOM: Adjustable panels side by side in 4-col grid -- */
-            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,alignItems:"start"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2458}}
+            , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,alignItems:"start"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2463}}
 
               /* Revenue Inputs */
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2461}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2462}}, "Revenue Inputs" )
-                , React.createElement(Slider, { fs: fs, label: "Vinyl Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.vinyl, () => (scenarioData.vinyl)), () => (0)), onChange: v=>upOv("vinyl",v), min: 0, max: 1500000, step: 5000, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2463}})
-                , React.createElement(Slider, { fs: fs, label: "CD Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.cd, () => (scenarioData.cd)), () => (0)), onChange: v=>upOv("cd",v), min: 0, max: 1000000, step: 2500, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2464}})
-                , React.createElement(Slider, { fs: fs, label: "GBO", value: _nullishCoalesce(_nullishCoalesce(overrides.gbo, () => (scenarioData.gbo)), () => (0)), onChange: v=>upOv("gbo",v), min: 0, max: 20000000, step: 100000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2465}})
-                , React.createElement(Slider, { fs: fs, label: "Streaming Sale" , value: _nullishCoalesce(_nullishCoalesce(overrides.streamingSale, () => (scenarioData.streamingSale)), () => (0)), onChange: v=>upOv("streamingSale",v), min: 0, max: 10000000, step: 100000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2466}})
-                , React.createElement(Slider, { fs: fs, label: "Streams", value: _nullishCoalesce(_nullishCoalesce(overrides.streams, () => (scenarioData.streams)), () => (0)), onChange: v=>upOv("streams",v), min: 0, max: 12000000000, step: 50000000, fmt: v=>(v/1e9).toFixed(2)+"B", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2467}})
-                , React.createElement(Slider, { fs: fs, label: "Merch Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.merchUnits, () => (scenarioData.merchUnits)), () => (0)), onChange: v=>upOv("merchUnits",v), min: 0, max: 200000, step: 1000, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2468}})
-                , React.createElement('div', { style: {borderTop:`1px solid ${T.border}`,paddingTop:10,marginTop:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2469}}
-                  , React.createElement('div', { style: {fontSize:11,color:T.textDim,fontFamily:MN,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.1em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2470}}, "Price Assumptions" )
-                  , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2471}}
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2466}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2467}}, "Revenue Inputs" )
+                , React.createElement(Slider, { fs: fs, label: "Vinyl Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.vinyl, () => (scenarioData.vinyl)), () => (0)), onChange: v=>upOv("vinyl",v), min: 0, max: 1500000, step: 5000, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2468}})
+                , React.createElement(Slider, { fs: fs, label: "CD Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.cd, () => (scenarioData.cd)), () => (0)), onChange: v=>upOv("cd",v), min: 0, max: 1000000, step: 2500, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2469}})
+                , React.createElement(Slider, { fs: fs, label: "GBO", value: _nullishCoalesce(_nullishCoalesce(overrides.gbo, () => (scenarioData.gbo)), () => (0)), onChange: v=>upOv("gbo",v), min: 0, max: 20000000, step: 100000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2470}})
+                , React.createElement(Slider, { fs: fs, label: "Streaming Sale" , value: _nullishCoalesce(_nullishCoalesce(overrides.streamingSale, () => (scenarioData.streamingSale)), () => (0)), onChange: v=>upOv("streamingSale",v), min: 0, max: 10000000, step: 100000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2471}})
+                , React.createElement(Slider, { fs: fs, label: "Streams", value: _nullishCoalesce(_nullishCoalesce(overrides.streams, () => (scenarioData.streams)), () => (0)), onChange: v=>upOv("streams",v), min: 0, max: 12000000000, step: 50000000, fmt: v=>(v/1e9).toFixed(2)+"B", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2472}})
+                , React.createElement(Slider, { fs: fs, label: "Merch Units" , value: _nullishCoalesce(_nullishCoalesce(overrides.merchUnits, () => (scenarioData.merchUnits)), () => (0)), onChange: v=>upOv("merchUnits",v), min: 0, max: 200000, step: 1000, fmt: fmtShort, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2473}})
+                , React.createElement('div', { style: {borderTop:`1px solid ${T.border}`,paddingTop:10,marginTop:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2474}}
+                  , React.createElement('div', { style: {fontSize:11,color:T.textDim,fontFamily:MN,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.1em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2475}}, "Price Assumptions" )
+                  , React.createElement('div', { style: {display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2476}}
                     , [["Vinyl MSRP","vinylMSRP","number","$"],["Merch ASP","merchASP","number","$"],["$/Stream","revenuePerStream","number",""]].map(([l,k,t,pre])=>(
-                      React.createElement('div', { key: k, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2473}}
-                        , React.createElement('div', { style: {fontSize:10,color:T.textFaint,fontFamily:MN,marginBottom:2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2474}}, l)
+                      React.createElement('div', { key: k, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2478}}
+                        , React.createElement('div', { style: {fontSize:10,color:T.textFaint,fontFamily:MN,marginBottom:2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2479}}, l)
                         , React.createElement('input', { type: t, step: k==="revenuePerStream"?"0.0005":"1", value: effectiveRates[k], onChange: e=>upRate(k,Number(e.target.value)),
-                          style: {width:"100%",padding:"5px 6px",background:T.inputBg,border:`1px solid ${T.inputBorder}`,borderRadius:3,color:T.text,fontFamily:MN,fontSize:14,outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2475}})
+                          style: {width:"100%",padding:"5px 6px",background:T.inputBg,border:`1px solid ${T.inputBorder}`,borderRadius:3,color:T.text,fontFamily:MN,fontSize:14,outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2480}})
                       )
                     ))
                   )
@@ -2538,37 +2500,37 @@ const FONT_SIZES=[13,14,15,16,18];
               )
 
               /* Artist Deal + Royalties stacked */
-              , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2484}}
-                , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2485}}
-                  , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2486}}, "Artist Deal" )
-                  , React.createElement(Slider, { fs: fs, label: "Artist Fee" , value: _nullishCoalesce(_nullishCoalesce(overrides.artistFee, () => (scenarioData.artistFee)), () => (0)), onChange: v=>upOv("artistFee",v), min: 0, max: 4000000, step: 50000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2487}})
-                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2488}}, "Fixed  --  excluded from budget scaling"       )
-                  , React.createElement(Slider, { fs: fs, label: `Artist Backend: ${effectiveRates.backendArtist}pts`, value: effectiveRates.backendArtist, onChange: v=>upRate("backendArtist",v), min: 0, max: 50, step: 1, fmt: v=>v+"pts", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2489}})
-                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2490}}, "TRM = 100 - 50 - "      , rates.backendArtist, " = "  , trmPts(rates.backendArtist), "pts")
+              , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2489}}
+                , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2490}}
+                  , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2491}}, "Artist Deal" )
+                  , React.createElement(Slider, { fs: fs, label: "Artist Fee" , value: _nullishCoalesce(_nullishCoalesce(overrides.artistFee, () => (scenarioData.artistFee)), () => (0)), onChange: v=>upOv("artistFee",v), min: 0, max: 4000000, step: 50000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2492}})
+                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2493}}, "Fixed  --  excluded from budget scaling"       )
+                  , React.createElement(Slider, { fs: fs, label: `Artist Backend: ${effectiveRates.backendArtist}pts`, value: effectiveRates.backendArtist, onChange: v=>upRate("backendArtist",v), min: 0, max: 50, step: 1, fmt: v=>v+"pts", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2494}})
+                  , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2495}}, "TRM = 100 - 50 - "      , rates.backendArtist, " = "  , trmPts(rates.backendArtist), "pts")
                 )
-                , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2492}}
-                  , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2493}}, "Royalties & Fees"  )
-                   , React.createElement(Slider, { fs: fs, label: "Mainfactor Fee" , value: effectiveRates.mainfactorFee, onChange: v=>upRate("mainfactorFee",v), min: 0.05, max: 0.30, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2494}})
-                  , React.createElement(Slider, { fs: fs, label: "Orchard Fee" , value: effectiveRates.orchardFee, onChange: v=>upRate("orchardFee",v), min: 0.10, max: 0.30, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2495}})
-                  , React.createElement(Slider, { fs: fs, label: "Label Royalty" , value: effectiveRates.labelRoyalty, onChange: v=>upRate("labelRoyalty",v), min: 0.05, max: 0.25, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2496}})
+                , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2497}}
+                  , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2498}}, "Royalties & Fees"  )
+                   , React.createElement(Slider, { fs: fs, label: "Mainfactor Fee" , value: effectiveRates.mainfactorFee, onChange: v=>upRate("mainfactorFee",v), min: 0.05, max: 0.30, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2499}})
+                  , React.createElement(Slider, { fs: fs, label: "Orchard Fee" , value: effectiveRates.orchardFee, onChange: v=>upRate("orchardFee",v), min: 0.10, max: 0.30, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2500}})
+                  , React.createElement(Slider, { fs: fs, label: "Label Royalty" , value: effectiveRates.labelRoyalty, onChange: v=>upRate("labelRoyalty",v), min: 0.05, max: 0.25, step: 0.01, fmt: fmtPct, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2501}})
                 )
               )
 
               /* Production Budget */
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2501}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2502}}, "Production Budget" )
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2506}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2507}}, "Production Budget" )
                 , (()=>{
                   const editedTotal=Object.values(result.budgetLines).reduce((a,v)=>a+v,0);
                   const derivedPct=Math.round(editedTotal/TOTAL_STANDARD_BUDGET*100);
                   const hasLineEdits=Object.keys(budgetLineEdits).length>0||(Object.keys((scenarios[selected]||{})._budgetLineEdits||{}).length>0&&Object.keys(budgetLineEdits).length===0);
                   return (
                     React.createElement(React.Fragment, null
-                      , React.createElement('div', { style: {marginBottom:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2509}}
-                        , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2510}}
-                          , React.createElement('span', { style: {fontSize:11,fontFamily:MN,color:T.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2511}}, "Budget Scale" )
-                          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2512}}
-                            , React.createElement('span', { style: {fontSize:14,fontFamily:MN,fontWeight:700,color:hasLineEdits?T.gold:T.text}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2513}}, hasLineEdits?derivedPct:activeBudgetPct, "%")
-                            , hasLineEdits&&React.createElement('button', { onClick: ()=>{setBudgetLineEdits({});markDirty();}, style: {...btn,fontSize:10,padding:"1px 7px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2514}}, "Reset")
+                      , React.createElement('div', { style: {marginBottom:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2514}}
+                        , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2515}}
+                          , React.createElement('span', { style: {fontSize:11,fontFamily:MN,color:T.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2516}}, "Budget Scale" )
+                          , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2517}}
+                            , React.createElement('span', { style: {fontSize:14,fontFamily:MN,fontWeight:700,color:hasLineEdits?T.gold:T.text}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2518}}, hasLineEdits?derivedPct:activeBudgetPct, "%")
+                            , hasLineEdits&&React.createElement('button', { onClick: ()=>{setBudgetLineEdits({});markDirty();}, style: {...btn,fontSize:10,padding:"1px 7px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2519}}, "Reset")
                           )
                         )
                         , React.createElement('input', { type: "range", min: 30, max: 100, step: 5,
@@ -2583,13 +2545,13 @@ const FONT_SIZES=[13,14,15,16,18];
                             upBudgetPct(pct);
                             markDirty();
                           },
-                          style: {width:"100%"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2517}})
-                        , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2530}}, "Drag to scale all lines . individual lines editable below"         )
+                          style: {width:"100%"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2522}})
+                        , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2535}}, "Drag to scale all lines . individual lines editable below"         )
                       )
                     )
                   );
                 })()
-                , React.createElement('div', { style: {fontFamily:MN,fontSize:fs-2,color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2535}}
+                , React.createElement('div', { style: {fontFamily:MN,fontSize:fs-2,color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2540}}
                   , [
                     ["ATL","budgetATL",result.budgetLines.atl],
                     ["BTL","budgetBTL",result.budgetLines.btl],
@@ -2605,67 +2567,67 @@ const FONT_SIZES=[13,14,15,16,18];
                     // Marketing overrun: budgeted > neededMktg
                     const mktgFlag=k==="budgetMarketing"&&result.neededMktg>0&&v>result.neededMktg;
                     return (
-                      React.createElement('div', { key: k, style: {display:"flex",justifyContent:"space-between",alignItems:"center",padding:"2px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2551}}
-                        , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2552}}
-                          , React.createElement('span', { style: {color:isOpen?T.gold:isEdited?T.gold:T.textDim,fontSize:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2553}}, l, isOpen?" *":"")
+                      React.createElement('div', { key: k, style: {display:"flex",justifyContent:"space-between",alignItems:"center",padding:"2px 0",borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2556}}
+                        , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2557}}
+                          , React.createElement('span', { style: {color:isOpen?T.gold:isEdited?T.gold:T.textDim,fontSize:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2558}}, l, isOpen?" *":"")
                           , mktgFlag&&!isOpen&&(
                             React.createElement('span', { title: `Marketing budget ${fmtD(v)} exceeds needed ${fmtD(result.neededMktg)} at current ROAS target. Consider reducing to ${fmtD(Math.round(result.neededMktg/1000)*1000)}.`,
-                              style: {fontSize:9,fontFamily:MN,padding:"0px 4px",borderRadius:2,background:T.orangeBg||"rgba(180,100,0,0.1)",color:T.orange||"#b46400",border:`1px solid ${T.orange||"#b46400"}33`,cursor:"help"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2555}}, "! over ROAS target"
+                              style: {fontSize:9,fontFamily:MN,padding:"0px 4px",borderRadius:2,background:T.orangeBg||"rgba(180,100,0,0.1)",color:T.orange||"#b46400",border:`1px solid ${T.orange||"#b46400"}33`,cursor:"help"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2560}}, "! over ROAS target"
 
                             )
                           )
                         )
                         , isOpen?(
-                          React.createElement('div', { style: {display:"flex",gap:3,alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2562}}
+                          React.createElement('div', { style: {display:"flex",gap:3,alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2567}}
                             , React.createElement('input', { autoFocus: true, type: "number", value: editingBudgetVal,
                               onChange: e=>setEditingBudgetVal(e.target.value),
                               onKeyDown: e=>{ if(e.key==="Enter") saveBudgetLineEdit(k,editingBudgetVal); if(e.key==="Escape") cancelBudgetLineEdit(); },
                               onBlur: ()=>saveBudgetLineEdit(k,editingBudgetVal),
-                              style: {width:80,padding:"1px 4px",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:10,outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2563}})
-                            , React.createElement('button', { onMouseDown: e=>{e.preventDefault();saveBudgetLineEdit(k,editingBudgetVal);}, style: {...btn,fontSize:9,padding:"1px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2568}}, "v")
-                            , React.createElement('button', { onMouseDown: e=>{e.preventDefault();cancelBudgetLineEdit();}, style: {...btn,fontSize:9,padding:"1px 5px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2569}}, "x")
+                              style: {width:80,padding:"1px 4px",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:10,outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2568}})
+                            , React.createElement('button', { onMouseDown: e=>{e.preventDefault();saveBudgetLineEdit(k,editingBudgetVal);}, style: {...btn,fontSize:9,padding:"1px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2573}}, "v")
+                            , React.createElement('button', { onMouseDown: e=>{e.preventDefault();cancelBudgetLineEdit();}, style: {...btn,fontSize:9,padding:"1px 5px",background:"transparent",border:`1px solid ${T.border}`,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2574}}, "x")
                           )
                         ):(
                           React.createElement('button', { onClick: ()=>{setEditingBudgetKey(k);setEditingBudgetVal(String(v));},
-                            style: {...btn,fontSize:10,padding:"0",background:"none",border:"none",color:isEdited?T.gold:T.text,fontFamily:MN,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2572}}, fmtD(v))
+                            style: {...btn,fontSize:10,padding:"0",background:"none",border:"none",color:isEdited?T.gold:T.text,fontFamily:MN,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2577}}, fmtD(v))
                         )
                       )
                     );
                   })
                 )
-                , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",padding:"4px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2579}}
-                  , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2580}}, "Total"), React.createElement('span', { style: {color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2580}}, fmtD(result.productionBudget))
+                , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",padding:"4px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2584}}
+                  , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2585}}, "Total"), React.createElement('span', { style: {color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2585}}, fmtD(result.productionBudget))
                 )
-                , React.createElement(Slider, { fs: fs, label: `TRM Deferral: ${fmtD(effectiveRates.trmDeferral)}`, value: effectiveRates.trmDeferral, onChange: v=>upRate("trmDeferral",v), min: 0, max: 1000000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2582}})
-                , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",padding:"2px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2583}}
-                  , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2584}}, "Total incl. Deferral"  ), React.createElement('span', { style: {color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2584}}, fmtD(result.productionBudget+rates.trmDeferral))
+                , React.createElement(Slider, { fs: fs, label: `TRM Deferral: ${fmtD(effectiveRates.trmDeferral)}`, value: effectiveRates.trmDeferral, onChange: v=>upRate("trmDeferral",v), min: 0, max: 1000000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2587}})
+                , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",padding:"2px 0",fontWeight:700,fontFamily:MN,fontSize:fs-2,borderTop:`1px solid ${T.borderStrong}`,marginTop:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2588}}
+                  , React.createElement('span', { style: {color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2589}}, "Total incl. Deferral"  ), React.createElement('span', { style: {color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2589}}, fmtD(result.productionBudget+rates.trmDeferral))
                 )
                 , (result.albumMfgOverage>0||result.merchMfgOverage>0)&&(
-                  React.createElement('div', { style: {marginTop:8,display:"flex",flexDirection:"column",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2587}}
-                    , result.albumMfgOverage>0&&React.createElement('div', { style: {padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2588}}, "! Album mfg budget ^ by "      , fmtD(result.albumMfgOverage))
-                    , result.merchMfgOverage>0&&React.createElement('div', { style: {padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2589}}, "! Merch mfg budget ^ by "      , fmtD(result.merchMfgOverage))
+                  React.createElement('div', { style: {marginTop:8,display:"flex",flexDirection:"column",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2592}}
+                    , result.albumMfgOverage>0&&React.createElement('div', { style: {padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2593}}, "! Album mfg budget ^ by "      , fmtD(result.albumMfgOverage))
+                    , result.merchMfgOverage>0&&React.createElement('div', { style: {padding:"5px 8px",background:T.redBg,border:"1px solid rgba(176,48,48,0.3)",borderRadius:4,fontSize:10,color:T.red,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2594}}, "! Merch mfg budget ^ by "      , fmtD(result.merchMfgOverage))
                   )
                 )
               )
 
               /* Marketing */
-              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2595}}
-                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2596}}, "Marketing")
-                , React.createElement(Slider, { fs: fs, label: "Orchard Drawdown" , value: _nullishCoalesce(_nullishCoalesce(overrides.orchardDrawdown, () => (scenarioData.orchardDrawdown)), () => (0)), onChange: v=>upOv("orchardDrawdown",v), min: 0, max: 1000000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2597}})
-                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2598}}, "Max $1M . Recouped from album revenue"      )
-                , React.createElement(Slider, { fs: fs, label: "Trafalgar P&A" , value: trafPA, onChange: v=>upOv("pa",v), min: 0, max: 1200000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2599}})
-                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2600}}, "Defaults to match dist. costs"    )
-                , React.createElement(Slider, { fs: fs, label: `Target ROAS: ${effectiveRates.targetROAS||5}x`, value: effectiveRates.targetROAS||5, onChange: v=>upRate("targetROAS",v), min: 1, max: 15, step: 0.5, fmt: v=>v+"x", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2601}})
-                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2602}}, "Higher ROAS = lower needed marketing budget"      )
-                , React.createElement('div', { style: {background:T.bgDeep,borderRadius:5,padding:"10px 12px",border:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2603}}
-                  , React.createElement('div', { style: {fontSize:11,color:T.textDim,fontFamily:MN,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2604}}, "ROAS")
-                  , React.createElement('div', { style: {display:"flex",alignItems:"baseline",gap:8,marginBottom:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2605}}
-                    , React.createElement('span', { style: {fontSize:24,fontFamily:SR,color:result.roas>=3?T.green:result.roas>=1.5?T.gold:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2606}}, result.roas.toFixed(2), "x")
-                    , React.createElement('span', { style: {fontSize:10,color:T.textDim,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2607}}, "per $1 marketing"  )
+              , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2600}}
+                , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2601}}, "Marketing")
+                , React.createElement(Slider, { fs: fs, label: "Orchard Drawdown" , value: _nullishCoalesce(_nullishCoalesce(overrides.orchardDrawdown, () => (scenarioData.orchardDrawdown)), () => (0)), onChange: v=>upOv("orchardDrawdown",v), min: 0, max: 1000000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2602}})
+                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginBottom:10,marginTop:-4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2603}}, "Max $1M . Recouped from album revenue"      )
+                , React.createElement(Slider, { fs: fs, label: "Trafalgar P&A" , value: trafPA, onChange: v=>upOv("pa",v), min: 0, max: 1200000, step: 25000, fmt: fmtD, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2604}})
+                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2605}}, "Defaults to match dist. costs"    )
+                , React.createElement(Slider, { fs: fs, label: `Target ROAS: ${effectiveRates.targetROAS||5}x`, value: effectiveRates.targetROAS||5, onChange: v=>upRate("targetROAS",v), min: 1, max: 15, step: 0.5, fmt: v=>v+"x", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2606}})
+                , React.createElement('div', { style: {fontSize:11,color:T.textFaint,fontFamily:MN,marginTop:-4,marginBottom:12}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2607}}, "Higher ROAS = lower needed marketing budget"      )
+                , React.createElement('div', { style: {background:T.bgDeep,borderRadius:5,padding:"10px 12px",border:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2608}}
+                  , React.createElement('div', { style: {fontSize:11,color:T.textDim,fontFamily:MN,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2609}}, "ROAS")
+                  , React.createElement('div', { style: {display:"flex",alignItems:"baseline",gap:8,marginBottom:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2610}}
+                    , React.createElement('span', { style: {fontSize:24,fontFamily:SR,color:result.roas>=3?T.green:result.roas>=1.5?T.gold:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2611}}, result.roas.toFixed(2), "x")
+                    , React.createElement('span', { style: {fontSize:10,color:T.textDim,fontFamily:MN}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2612}}, "per $1 marketing"  )
                   )
                   , [["Core Marketing",result.budgetLines.marketing],["Orchard Drawdown",scenarioData.orchardDrawdown||0],["Trafalgar P&A",trafPA],["Total Marketing",result.totalMarketing],[`Needed (/${effectiveRates.targetROAS||5} ROAS)`,result.neededMktg],["Album+Merch Gross",result.neededMktg*(effectiveRates.targetROAS||5)]].map(([l,v],i)=>(
-                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"2px 0",borderTop:i===3?`1px solid ${T.border}`:"none",fontFamily:MN,fontSize:fs-2,fontWeight:i>=3?600:400,color:i===5?T.gold:i>=3?T.text:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2610}}
-                      , React.createElement('span', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2611}}, l), React.createElement('span', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2611}}, fmtD(v))
+                    React.createElement('div', { key: l, style: {display:"flex",justifyContent:"space-between",padding:"2px 0",borderTop:i===3?`1px solid ${T.border}`:"none",fontFamily:MN,fontSize:fs-2,fontWeight:i>=3?600:400,color:i===5?T.gold:i>=3?T.text:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2615}}
+                      , React.createElement('span', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2616}}, l), React.createElement('span', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2616}}, fmtD(v))
                     )
                   ))
                 )
@@ -2676,11 +2638,11 @@ const FONT_SIZES=[13,14,15,16,18];
         )
         /* == COMPARE TAB == */
         , tab==="compare"&&(
-          React.createElement('div', { style: {...card,padding:0,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2622}}
-            , React.createElement('div', { style: {overflowX:"auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2623}}
-              , React.createElement('table', { style: {width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:1000}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2624}}
-                , React.createElement('thead', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2625}}
-                  , React.createElement('tr', { style: {borderBottom:`2px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2626}}
+          React.createElement('div', { style: {...card,padding:0,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2627}}
+            , React.createElement('div', { style: {overflowX:"auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2628}}
+              , React.createElement('table', { style: {width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:1000}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2629}}
+                , React.createElement('thead', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2630}}
+                  , React.createElement('tr', { style: {borderBottom:`2px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2631}}
                     , [
                       {h:"Scenario",  sortKey:null},
                       {h:"Gross",     sortKey:"totalGross"},
@@ -2697,14 +2659,14 @@ const FONT_SIZES=[13,14,15,16,18];
                       const arrow=active?(compareSort.dir===1?"^":"v"):"";
                       return (
                         React.createElement('th', { key: h, onClick: sortKey?()=>setCompareSort(p=>p.col===sortKey?{col:sortKey,dir:-p.dir}:{col:sortKey,dir:-1}):undefined,
-                          style: {textAlign:h==="Scenario"?"left":"right",padding:"10px 12px",color:active?T.gold:T.textDim,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",whiteSpace:"nowrap",cursor:sortKey?"pointer":"default",userSelect:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2642}}
-                          , h, arrow&&React.createElement('span', { style: {marginLeft:4,fontSize:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2644}}, arrow)
+                          style: {textAlign:h==="Scenario"?"left":"right",padding:"10px 12px",color:active?T.gold:T.textDim,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",whiteSpace:"nowrap",cursor:sortKey?"pointer":"default",userSelect:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2647}}
+                          , h, arrow&&React.createElement('span', { style: {marginLeft:4,fontSize:10}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2649}}, arrow)
                         )
                       );
                     })
                   )
                 )
-                , React.createElement('tbody', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2650}}
+                , React.createElement('tbody', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2655}}
                   , (()=>{
                     let rows=Object.entries(scenarios).map(([name,s])=>{
                       const r=run(s,effectiveRates,budgetPct/100);
@@ -2718,56 +2680,56 @@ const FONT_SIZES=[13,14,15,16,18];
                       });
                     }
                     return rows.map(({name,s,r,artistFeeVal})=>(
-                      React.createElement('tr', { key: name, className: "hover-row", onClick: ()=>{setSelected(name);setTab("model");}, style: {borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selected===name?T.goldBg:"transparent"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2664}}
-                        , React.createElement('td', { style: {padding:"8px 12px",color:selected===name?T.gold:T.text,fontWeight:selected===name?600:400,whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2665}}, name)
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2666}}, fmtD(r.totalGross))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2667}}, fmtD(r.totalNTC))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2668}}, fmtD(r.investorPrincipal))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2669}}, fmtD(r.totalInvestorReturn))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:r.investorROI>=0?T.green:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2670}}, fmtPct(r.investorROI))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2671}}, fmtD(artistFeeVal))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2672}}, fmtD(r.totalArtistIncome))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2673}}, fmtD(r.totalTRMReturn))
-                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:r.netProceeds>0?T.green:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2674}}, fmtD(r.netProceeds))
+                      React.createElement('tr', { key: name, className: "hover-row", onClick: ()=>{setSelected(name);setTab("model");}, style: {borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selected===name?T.goldBg:"transparent"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2669}}
+                        , React.createElement('td', { style: {padding:"8px 12px",color:selected===name?T.gold:T.text,fontWeight:selected===name?600:400,whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2670}}, name)
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2671}}, fmtD(r.totalGross))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2672}}, fmtD(r.totalNTC))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2673}}, fmtD(r.investorPrincipal))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.gold,fontWeight:600}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2674}}, fmtD(r.totalInvestorReturn))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:r.investorROI>=0?T.green:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2675}}, fmtPct(r.investorROI))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2676}}, fmtD(artistFeeVal))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2677}}, fmtD(r.totalArtistIncome))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:T.textMid}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2678}}, fmtD(r.totalTRMReturn))
+                        , React.createElement('td', { style: {textAlign:"right",padding:"8px 12px",color:r.netProceeds>0?T.green:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2679}}, fmtD(r.netProceeds))
                       )
                     ));
                   })()
                 )
               )
             )
-            , React.createElement('div', { style: {padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2681}}, "Click any row -> full model view . Click column headers to sort"            )
+            , React.createElement('div', { style: {padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2686}}, "Click any row -> full model view . Click column headers to sort"            )
           )
         )
 
         /* == WATERFALL TAB == */
         , tab==="waterfall"&&(
-          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:14,maxWidth:760}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2687}}
-            , React.createElement('div', { style: {fontFamily:SR,fontSize:21,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2688}}, selected)
-            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2689}}
-              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2690}}, "Gross Revenue -> NTC"   )
+          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:14,maxWidth:760}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2692}}
+            , React.createElement('div', { style: {fontFamily:SR,fontSize:21,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2693}}, selected)
+            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2694}}
+              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2695}}, "Gross Revenue -> NTC"   )
               , result.revenueBreakdown.map((s,i)=>(
-                React.createElement('div', { key: s.name, style: {marginBottom:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2692}}
-                  , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",marginBottom:4,flexWrap:"wrap",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2693}}
-                    , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:7}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2694}}, React.createElement('div', { style: {width:6,height:6,borderRadius:2,background:CL[i]}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2694}}), React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,fontWeight:500}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2694}}, s.name))
-                    , React.createElement('div', { style: {display:"flex",gap:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2695}}, React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2695}}, fmtD(s.gross), " -> "  , fmtD(s.net)), React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,color:CL[i]}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2695}}, s.gross>0?fmtPct(s.net/s.gross)+" kept":" -- "))
+                React.createElement('div', { key: s.name, style: {marginBottom:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2697}}
+                  , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",marginBottom:4,flexWrap:"wrap",gap:4}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2698}}
+                    , React.createElement('div', { style: {display:"flex",alignItems:"center",gap:7}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2699}}, React.createElement('div', { style: {width:6,height:6,borderRadius:2,background:CL[i]}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2699}}), React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,fontWeight:500}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2699}}, s.name))
+                    , React.createElement('div', { style: {display:"flex",gap:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2700}}, React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,color:T.textDim}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2700}}, fmtD(s.gross), " -> "  , fmtD(s.net)), React.createElement('span', { style: {fontFamily:MN,fontSize:fs-2,color:CL[i]}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2700}}, s.gross>0?fmtPct(s.net/s.gross)+" kept":" -- "))
                   )
-                  , React.createElement('div', { style: {height:5,background:T.bgDeep,borderRadius:3,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2697}}
-                    , React.createElement('div', { style: {width:result.totalGross>0?(s.gross/result.totalGross*100)+"%":0,height:"100%",background:CL[i]+"30",borderRadius:3,position:"relative"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2698}}
-                      , React.createElement('div', { style: {width:s.gross>0?(s.net/s.gross*100)+"%":0,height:"100%",background:CL[i],borderRadius:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2699}})
+                  , React.createElement('div', { style: {height:5,background:T.bgDeep,borderRadius:3,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2702}}
+                    , React.createElement('div', { style: {width:result.totalGross>0?(s.gross/result.totalGross*100)+"%":0,height:"100%",background:CL[i]+"30",borderRadius:3,position:"relative"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2703}}
+                      , React.createElement('div', { style: {width:s.gross>0?(s.net/s.gross*100)+"%":0,height:"100%",background:CL[i],borderRadius:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2704}})
                     )
                   )
                 )
               ))
             )
-            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2705}}
-              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2706}}, "NTC -> Recoup -> Backend"    )
-              , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:4,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2707}}
+            , React.createElement('div', { style: card, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2710}}
+              , React.createElement('div', { style: slab, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2711}}, "NTC -> Recoup -> Backend"    )
+              , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:4,fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2712}}
                 , wfRows.map(([l,v,c],i)=>{
                   const isTotal=l.startsWith("="),isArrow=l.startsWith("->");
                   return (
-                    React.createElement('div', { key: i, style: {display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:isTotal?`1px solid ${T.borderStrong}`:"none",borderBottom:isTotal?`1px solid ${T.borderStrong}`:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2711}}
-                      , React.createElement('span', { style: {color:(isTotal||isArrow)?c:T.textDim,fontWeight:isTotal?600:400}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2712}}, l)
-                      , React.createElement('span', { style: {color:c,fontWeight:(isTotal||isArrow)?700:400}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2713}}, fmtD(v))
+                    React.createElement('div', { key: i, style: {display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:isTotal?`1px solid ${T.borderStrong}`:"none",borderBottom:isTotal?`1px solid ${T.borderStrong}`:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2716}}
+                      , React.createElement('span', { style: {color:(isTotal||isArrow)?c:T.textDim,fontWeight:isTotal?600:400}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2717}}, l)
+                      , React.createElement('span', { style: {color:c,fontWeight:(isTotal||isArrow)?700:400}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2718}}, fmtD(v))
                     )
                   );
                 })
@@ -2778,30 +2740,30 @@ const FONT_SIZES=[13,14,15,16,18];
 
         /* == SCENARIOS TAB == */
         , tab==="scenarios"&&(
-          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2724}}
-            , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2725}}
-              , React.createElement('div', { style: {fontFamily:SR,fontSize:21,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2726}}, "All Scenarios" )
-              , React.createElement('div', { style: {display:"flex",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2727}}
-                , React.createElement('button', { onClick: ()=>setShowBuilder(true), style: {...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2728}}, "+ New Artist"  )
-                , React.createElement('button', { onClick: exportScenariosCSV, style: {...btn,padding:"6px 12px",fontSize:12,background:T.blueBg,border:`1px solid rgba(26,78,138,0.3)`,color:T.blue}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2729}}, "v Export CSV"  )
-                , React.createElement('button', { onClick: ()=>_optionalChain([csvImportRef, 'access', _39 => _39.current, 'optionalAccess', _40 => _40.click, 'call', _41 => _41()]), style: {...btn,padding:"6px 12px",fontSize:12,background:"rgba(26,110,58,0.1)",border:`1px solid rgba(26,110,58,0.3)`,color:T.green}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2730}}, "^ Import CSV"  )
-                , React.createElement('input', { ref: csvImportRef, type: "file", accept: ".csv,text/csv", style: {display:"none"}, onChange: e=>{importScenariosCSV(_optionalChain([e, 'access', _42 => _42.target, 'access', _43 => _43.files, 'optionalAccess', _44 => _44[0]]));e.target.value="";}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2731}})
-                , React.createElement('button', { onClick: ()=>{setScenarios(SEED);setRates({...DR});}, style: {...btn,padding:"6px 12px",fontSize:12,background:T.redBg,border:`1px solid rgba(176,48,48,0.3)`,color:T.red}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2732}}, "Reset Defaults" )
+          React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:14}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2729}}
+            , React.createElement('div', { style: {display:"flex",justifyContent:"space-between",alignItems:"center"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2730}}
+              , React.createElement('div', { style: {fontFamily:SR,fontSize:21,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2731}}, "All Scenarios" )
+              , React.createElement('div', { style: {display:"flex",gap:8}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2732}}
+                , React.createElement('button', { onClick: ()=>setShowBuilder(true), style: {...btn,padding:"6px 14px",fontSize:12,background:T.goldBg,border:`1px solid ${T.goldBorder}`,color:T.gold}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2733}}, "+ New Artist"  )
+                , React.createElement('button', { onClick: exportScenariosCSV, style: {...btn,padding:"6px 12px",fontSize:12,background:T.blueBg,border:`1px solid rgba(26,78,138,0.3)`,color:T.blue}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2734}}, "v Export CSV"  )
+                , React.createElement('button', { onClick: ()=>_optionalChain([csvImportRef, 'access', _39 => _39.current, 'optionalAccess', _40 => _40.click, 'call', _41 => _41()]), style: {...btn,padding:"6px 12px",fontSize:12,background:"rgba(26,110,58,0.1)",border:`1px solid rgba(26,110,58,0.3)`,color:T.green}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2735}}, "^ Import CSV"  )
+                , React.createElement('input', { ref: csvImportRef, type: "file", accept: ".csv,text/csv", style: {display:"none"}, onChange: e=>{importScenariosCSV(_optionalChain([e, 'access', _42 => _42.target, 'access', _43 => _43.files, 'optionalAccess', _44 => _44[0]]));e.target.value="";}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2736}})
+                , React.createElement('button', { onClick: ()=>{setScenarios(SEED);setRates({...DR});}, style: {...btn,padding:"6px 12px",fontSize:12,background:T.redBg,border:`1px solid rgba(176,48,48,0.3)`,color:T.red}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2737}}, "Reset Defaults" )
               )
             )
-            , React.createElement('div', { style: {...card,padding:0,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2735}}
-              , React.createElement('div', { style: {overflowX:"auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2736}}
-                , React.createElement('table', { style: {width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:900}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2737}}
-                  , React.createElement('thead', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2738}}
-                    , React.createElement('tr', { style: {borderBottom:`2px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2739}}
-                      , React.createElement('th', { style: {textAlign:"left",padding:"10px 12px",color:T.textDim,fontSize:11,textTransform:"uppercase",position:"sticky",left:0,background:T.bgSub,zIndex:2,minWidth:180}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2740}}, "Scenario")
-                      , FIELDS.map(f=>React.createElement('th', { key: f.k, style: {textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2741}}, f.l))
-                      , React.createElement('th', { style: {textAlign:"right",padding:"10px 8px",color:T.gold,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}, title: "Per-scenario budget scale. Click lock to override global."       , __self: this, __source: {fileName: _jsxFileName, lineNumber: 2742}}, "Budget%")
-                      , React.createElement('th', { style: {textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2743}}, "ROI")
-                      , React.createElement('th', { style: {width:90}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2744}})
+            , React.createElement('div', { style: {...card,padding:0,overflow:"hidden"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2740}}
+              , React.createElement('div', { style: {overflowX:"auto"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2741}}
+                , React.createElement('table', { style: {width:"100%",borderCollapse:"collapse",fontSize:fs-2,fontFamily:MN,minWidth:900}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2742}}
+                  , React.createElement('thead', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2743}}
+                    , React.createElement('tr', { style: {borderBottom:`2px solid ${T.border}`,background:T.bgSub}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2744}}
+                      , React.createElement('th', { style: {textAlign:"left",padding:"10px 12px",color:T.textDim,fontSize:11,textTransform:"uppercase",position:"sticky",left:0,background:T.bgSub,zIndex:2,minWidth:180}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2745}}, "Scenario")
+                      , FIELDS.map(f=>React.createElement('th', { key: f.k, style: {textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2746}}, f.l))
+                      , React.createElement('th', { style: {textAlign:"right",padding:"10px 8px",color:T.gold,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}, title: "Per-scenario budget scale. Click lock to override global."       , __self: this, __source: {fileName: _jsxFileName, lineNumber: 2747}}, "Budget%")
+                      , React.createElement('th', { style: {textAlign:"right",padding:"10px 8px",color:T.textDim,fontSize:11,textTransform:"uppercase"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2748}}, "ROI")
+                      , React.createElement('th', { style: {width:90}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2749}})
                     )
                   )
-                  , React.createElement('tbody', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2747}}
+                  , React.createElement('tbody', {__self: this, __source: {fileName: _jsxFileName, lineNumber: 2752}}
                     , Object.keys(scenarios).map(name=>{
                       const scn=scenarios[name];
                       const scnBudgetPct=getScenarioBudgetPct(name);
@@ -2827,14 +2789,14 @@ const FONT_SIZES=[13,14,15,16,18];
                       });
                       const bk="scnbudget:"+name, editingBudget=editingCell===bk;
                       return (
-                        React.createElement('tr', { key: name, className: "hover-row", style: {borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2773}}
-                          , React.createElement('td', { style: {padding:"6px 12px",position:"sticky",left:0,background:T.bg,zIndex:1}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2774}}
-                            , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2775}}
-                              , React.createElement('span', { onClick: ()=>{setSelected(name);setTab("model");}, style: {color:selected===name?T.gold:T.text,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2776}}, name)
+                        React.createElement('tr', { key: name, className: "hover-row", style: {borderBottom:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2778}}
+                          , React.createElement('td', { style: {padding:"6px 12px",position:"sticky",left:0,background:T.bg,zIndex:1}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2779}}
+                            , React.createElement('div', { style: {display:"flex",flexDirection:"column",gap:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2780}}
+                              , React.createElement('span', { onClick: ()=>{setSelected(name);setTab("model");}, style: {color:selected===name?T.gold:T.text,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2781}}, name)
                               , flags.length>0&&(
-                                React.createElement('div', { style: {display:"flex",flexWrap:"wrap",gap:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2778}}
+                                React.createElement('div', { style: {display:"flex",flexWrap:"wrap",gap:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2783}}
                                   , flags.map((f,i)=>(
-                                    React.createElement('span', { key: i, title: f.tip, style: {fontSize:9,fontFamily:MN,padding:"1px 5px",borderRadius:3,background:f.color+"18",color:f.color,border:`1px solid ${f.color}33`,cursor:"help",letterSpacing:"0.04em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2780}}, "! "
+                                    React.createElement('span', { key: i, title: f.tip, style: {fontSize:9,fontFamily:MN,padding:"1px 5px",borderRadius:3,background:f.color+"18",color:f.color,border:`1px solid ${f.color}33`,cursor:"help",letterSpacing:"0.04em"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2785}}, "! "
                                        , f.label
                                     )
                                   ))
@@ -2845,29 +2807,29 @@ const FONT_SIZES=[13,14,15,16,18];
                           , FIELDS.map(f=>{
                             const ck=name+":"+f.k, editing=editingCell===ck;
                             return (
-                              React.createElement('td', { key: f.k, style: {textAlign:"right",padding:"5px 8px"}, onClick: ()=>{setEditingCell(ck);setEditVal(String(scn[f.k]||"")); }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2791}}
+                              React.createElement('td', { key: f.k, style: {textAlign:"right",padding:"5px 8px"}, onClick: ()=>{setEditingCell(ck);setEditVal(String(scn[f.k]||"")); }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2796}}
                                 , editing?(
                                   React.createElement('input', { autoFocus: true, value: editVal, onChange: e=>setEditVal(e.target.value),
                                     onBlur: ()=>{const n=Number(editVal.replace(/[^0-9.-]/g,""));if(!isNaN(n))setScenarios(p=>({...p,[name]:{...p[name],[f.k]:n}}));setEditingCell(null);},
                                     onKeyDown: e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingCell(null);},
-                                    style: {width:90,padding:"2px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2793}})
+                                    style: {width:90,padding:"2px 5px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2798}})
                                 ):(
-                                  React.createElement('span', { style: {color:T.textMid,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,paddingBottom:1}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2798}}, f.fmt(scn[f.k]))
+                                  React.createElement('span', { style: {color:T.textMid,cursor:"pointer",borderBottom:`1px dashed ${T.border}`,paddingBottom:1}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2803}}, f.fmt(scn[f.k]))
                                 )
                               )
                             );
                           })
                           /* Per-scenario Budget% column */
-                          , React.createElement('td', { style: {textAlign:"right",padding:"5px 8px"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2804}}
-                            , React.createElement('div', { style: {display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2805}}
+                          , React.createElement('td', { style: {textAlign:"right",padding:"5px 8px"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2809}}
+                            , React.createElement('div', { style: {display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2810}}
                               , editingBudget?(
                                 React.createElement('input', { autoFocus: true, value: editVal, onChange: e=>setEditVal(e.target.value),
                                   onBlur: ()=>{const n=Number(editVal.replace(/[^0-9]/g,""));if(n>=10&&n<=100){setScenarioBudgetPct(name,n);}setEditingCell(null);},
                                   onKeyDown: e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingCell(null);},
-                                  style: {width:44,padding:"2px 4px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2807}})
+                                  style: {width:44,padding:"2px 4px",background:T.goldBg,border:`1px solid ${T.goldBorder}`,borderRadius:3,color:T.gold,fontFamily:MN,fontSize:fs-2,textAlign:"right",outline:"none"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2812}})
                               ):(
                                 React.createElement('span', { onClick: ()=>{setEditingCell(bk);setEditVal(String(scnBudgetPct));},
-                                  style: {color:isLocked?T.gold:T.textDim,cursor:"pointer",fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2812}}
+                                  style: {color:isLocked?T.gold:T.textDim,cursor:"pointer",fontFamily:MN,fontSize:fs-2}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2817}}
                                   , scnBudgetPct, "%"
                                 )
                               )
@@ -2877,15 +2839,15 @@ const FONT_SIZES=[13,14,15,16,18];
                                 style: {cursor:"pointer",fontSize:9,padding:"2px 7px",borderRadius:8,fontFamily:MN,fontWeight:700,letterSpacing:"0.05em",
                                   background:isLocked?T.gold:"transparent",
                                   color:isLocked?"#fff":T.textFaint,
-                                  border:`1px solid ${isLocked?T.gold:T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2817}}
+                                  border:`1px solid ${isLocked?T.gold:T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2822}}
                                 , isLocked?"LOCKED":"GLOBAL"
                               )
                             )
                           )
-                          , React.createElement('td', { style: {textAlign:"right",padding:"5px 8px",color:res.investorROI>=0?T.green:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2828}}, fmtPct(res.investorROI))
-                          , React.createElement('td', { style: {padding:"5px 8px",textAlign:"right",whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2829}}
-                            , React.createElement('button', { onClick: ()=>duplicateScenario(name), style: {...btn,padding:"2px 7px",background:"transparent",color:T.blue,fontSize:15}, title: "Duplicate", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2830}}, "+")
-                            , React.createElement('button', { onClick: ()=>deleteScenario(name), style: {...btn,padding:"2px 7px",background:confirmDelete===name?T.redBg:"transparent",color:T.red,fontSize:14,marginLeft:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2831}}, confirmDelete===name?"sure?":"x")
+                          , React.createElement('td', { style: {textAlign:"right",padding:"5px 8px",color:res.investorROI>=0?T.green:T.red,fontWeight:700}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2833}}, fmtPct(res.investorROI))
+                          , React.createElement('td', { style: {padding:"5px 8px",textAlign:"right",whiteSpace:"nowrap"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2834}}
+                            , React.createElement('button', { onClick: ()=>duplicateScenario(name), style: {...btn,padding:"2px 7px",background:"transparent",color:T.blue,fontSize:15}, title: "Duplicate", __self: this, __source: {fileName: _jsxFileName, lineNumber: 2835}}, "+")
+                            , React.createElement('button', { onClick: ()=>deleteScenario(name), style: {...btn,padding:"2px 7px",background:confirmDelete===name?T.redBg:"transparent",color:T.red,fontSize:14,marginLeft:3}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2836}}, confirmDelete===name?"sure?":"x")
                           )
                         )
                       );
@@ -2893,7 +2855,7 @@ const FONT_SIZES=[13,14,15,16,18];
                   )
                 )
               )
-              , React.createElement('div', { style: {padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2839}}, "Click value to edit inline . Click name -> Model view . + duplicate . x delete (twice) . Hover flag badges for details"                       )
+              , React.createElement('div', { style: {padding:"8px 12px",fontSize:11,color:T.textFaint,fontFamily:MN,borderTop:`1px solid ${T.border}`}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2844}}, "Click value to edit inline . Click name -> Model view . + duplicate . x delete (twice) . Hover flag badges for details"                       )
             )
           )
         )
@@ -2901,20 +2863,18 @@ const FONT_SIZES=[13,14,15,16,18];
 
       /* == BACKEND TAB == */
       , tab==="backend"&&(
-        React.createElement('div', { style: {padding:"0 20px 40px"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2847}}
-          , React.createElement(BackendTab, { s: scenarioData, r: effectiveRates, budgetPct: Object.keys(budgetLineEdits).length>0?100:budgetPct, royaltyTopLine: royaltyTopLine, onToggleRoyalty: ()=>setRoyaltyTopLine(v=>!v), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2848}})
+        React.createElement('div', { style: {padding:"0 20px 40px"}, __self: this, __source: {fileName: _jsxFileName, lineNumber: 2852}}
+          , React.createElement(BackendTab, { s: scenarioData, r: effectiveRates, budgetPct: Object.keys(budgetLineEdits).length>0?100:budgetPct, royaltyTopLine: royaltyTopLine, onToggleRoyalty: ()=>setRoyaltyTopLine(v=>!v), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2853}})
         )
       )
 
       , showBuilder&&React.createElement(ProjectionsBuilder, {
   onSave: (name,data)=>{saveScenario(name,data);},
-  onCancel: ()=>setShowBuilder(false), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2852}}
+  onCancel: ()=>setShowBuilder(false), __self: this, __source: {fileName: _jsxFileName, lineNumber: 2857}}
 )
     )
   );
-} exports.default = TheRoundModel;
-
+} 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(TheRoundModel));
 </script>
-</body>
-</html>
+</body></html>
